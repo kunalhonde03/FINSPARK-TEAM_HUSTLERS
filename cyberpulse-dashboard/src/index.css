@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #0b0f13;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 180px),
+    #0b0f13;
+  color: #e6edf3;
+  font-family: Inter, "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #e8a33d;
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(232, 163, 61, 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2b3642;
+  border: 2px solid #0b0f13;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f13;
+}
+
+@layer components {
+  .soc-panel {
+    @apply border border-border bg-panel;
+    border-radius: 4px;
+  }
+
+  .soc-label {
+    @apply text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted;
+  }
+
+  .soc-mono {
+    @apply font-mono tracking-normal;
+  }
+
+  .soc-button {
+    @apply border border-borderStrong bg-panelSoft px-3 py-2 text-sm font-semibold text-text transition-colors;
+    border-radius: 3px;
+  }
+
+  .soc-button:hover {
+    @apply border-amber text-amber;
+  }
+
+  .soc-button-primary {
+    @apply border-amber bg-amber px-3 py-2 text-sm font-bold transition-opacity;
+    border-radius: 3px;
+    color: #0b0f13;
+  }
+
+  .soc-button-primary:hover {
+    opacity: 0.9;
+  }
+}
