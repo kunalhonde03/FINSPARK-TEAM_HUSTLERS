@@ -5,6 +5,7 @@ import { getHealth, getStats } from "./api/client.js";
 import Overview from "./pages/Overview.jsx";
 import UserTimeline from "./pages/UserTimeline.jsx";
 import Simulate from "./pages/Simulate.jsx";
+import QuantumRoadmap from "./pages/QuantumRoadmap.jsx";
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState("checking");
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/user/:id" element={<UserTimeline />} />
           <Route path="/simulate" element={<Simulate />} />
+          <Route path="/quantum-roadmap" element={<QuantumRoadmap />} />
         </Routes>
       </main>
     </div>
