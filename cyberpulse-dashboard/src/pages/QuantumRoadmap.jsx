@@ -4,33 +4,6 @@ import InventoryTable from "../components/InventoryTable.jsx";
 import { getCryptoInventory } from "../api/client.js";
 import { getAlerts, getStats } from "../api/client.js";
 
-const ROADMAP_ITEMS = [
-  {
-    title: "TLS 1.1 / SSL 3.0 exposure",
-    description: "Priority for legacy channels still servicing older endpoints.",
-    priority: "Critical",
-    tone: "red",
-  },
-  {
-    title: "RSA-1024 and SHA-1 certificates",
-    description: "Replace weak key material and deprecated signature algorithms.",
-    priority: "High",
-    tone: "amber",
-  },
-  {
-    title: "Hybrid post-quantum migration",
-    description: "Introduce quantum-safe key exchanges alongside current controls.",
-    priority: "Medium",
-    tone: "default",
-  },
-];
-
-function riskToneClass(tone) {
-  if (tone === "red") return "text-riskHigh";
-  if (tone === "amber") return "text-amber";
-  return "text-text";
-}
-
 export default function QuantumRoadmap() {
   const [stats, setStats] = useState(null);
   const [alerts, setAlerts] = useState([]);

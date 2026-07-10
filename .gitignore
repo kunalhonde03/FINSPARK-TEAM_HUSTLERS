@@ -25,3 +25,7 @@ Thumbs.db
 # Local env
 .env
 .env.*
+
+# Generated backend data and model artifacts
+cyberpulse/data/*.csv
+cyberpulse/data/*.joblib
