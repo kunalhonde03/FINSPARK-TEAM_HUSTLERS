@@ -50,6 +50,10 @@ export function getAlerts({ minRisk = 0, limit = 1000 } = {}) {
   });
 }
 
+export function getCryptoInventory() {
+  return request("/crypto-inventory");
+}
+
 export function getUserTimeline(userId) {
   return request(`/user/${encodeURIComponent(userId)}/timeline`);
 }

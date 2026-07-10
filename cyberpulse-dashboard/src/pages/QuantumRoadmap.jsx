@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import VulnerabilityPieChart from "../components/VulnerabilityPieChart.jsx";
+import InventoryTable from "../components/InventoryTable.jsx";
+import { getCryptoInventory } from "../api/client.js";
 import { getAlerts, getStats } from "../api/client.js";
 
 const ROADMAP_ITEMS = [
@@ -68,6 +70,21 @@ export default function QuantumRoadmap() {
     ];
   }, [alerts]);
 
+  const [inventory, setInventory] = useState(null);
+
+  async function loadInventory() {
+    try {
+      const inv = await getCryptoInventory();
+      setInventory(inv);
+    } catch (err) {
+      // keep inventory null on error
+    }
+  }
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
   const vulnerableSessions = alerts.filter((alert) => alert.quantum_risk_level === "High").length;
   const mediumSessions = alerts.filter((alert) => alert.quantum_risk_level === "Medium").length;
   const safeSessions = Math.max(0, alerts.length - vulnerableSessions - mediumSessions);
@@ -131,20 +148,11 @@ export default function QuantumRoadmap() {
                   )}
                 </div>
               </div>
-
-              {ROADMAP_ITEMS.map((item) => (
-                <div key={item.title} className="soc-panel p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-text">{item.title}</div>
-                      <div className="mt-1 text-sm text-muted">{item.description}</div>
-                    </div>
-                    <div className={`text-xs font-semibold uppercase tracking-[0.16em] ${riskToneClass(item.tone)}`}>
-                      {item.priority}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {inventory ? (
+                <InventoryTable inventory={inventory} />
+              ) : (
+                <div className="soc-panel p-4 text-sm text-muted">Inventory not available</div>
+              )}
             </div>
           </section>
         </>
