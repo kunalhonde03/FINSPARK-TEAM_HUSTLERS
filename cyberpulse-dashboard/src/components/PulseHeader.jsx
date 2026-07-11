@@ -66,6 +66,9 @@ export default function PulseHeader({ status, stats, lastChecked }) {
             <NavLink to="/simulate" className={navClass}>
               Simulate
             </NavLink>
+            <NavLink to="/methodology" className={navClass}>
+              Methodology
+            </NavLink>
           </nav>
 
           <div className="flex items-center gap-3 border border-border bg-panel px-3 py-2">

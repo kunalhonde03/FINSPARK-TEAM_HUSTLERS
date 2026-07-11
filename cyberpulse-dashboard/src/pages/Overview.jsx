@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AlertDrawer from "../components/AlertDrawer.jsx";
 import AlertTable from "../components/AlertTable.jsx";
 import StatsRow from "../components/StatsRow.jsx";
+import BusinessImpact from "../components/BusinessImpact.jsx";
 import { getAlerts, getStats } from "../api/client.js";
 
 export default function Overview() {
@@ -47,6 +48,7 @@ export default function Overview() {
       </div>
 
       <StatsRow stats={stats} loading={loading} error={error} />
+      <BusinessImpact stats={stats} loading={loading} error={error} />
       <AlertTable alerts={alerts} loading={loading} error={error} onSelect={setSelectedAlert} />
       <AlertDrawer alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
     </div>

@@ -239,13 +239,55 @@ export default function SimulatePanel() {
 
             <div>
               <div className="soc-label">Contributing signals</div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {(result.feature_contributions || []).map((item) => (
-                  <div key={`${item.feature}-${item.value}`} className="border border-border bg-base px-3 py-2">
-                    <div className="text-sm font-semibold text-text">{item.feature}</div>
-                    <div className="soc-mono mt-1 text-xs text-muted">{item.value}</div>
-                  </div>
-                ))}
+              <div className="mt-2 space-y-3">
+                {(() => {
+                  const raw = result.feature_contributions || [];
+                  if (raw.length === 0) {
+                    return <div className="text-sm text-muted">No structured feature contribution list returned.</div>;
+                  }
+                  
+                  const weighted = raw.map(item => {
+                    let weight = 1;
+                    if (item.severity === "high") weight = 3;
+                    else if (item.severity === "medium") weight = 2;
+                    return { ...item, weight };
+                  });
+                  
+                  const sum = weighted.reduce((acc, item) => acc + item.weight, 0);
+                  const items = weighted.map(item => ({
+                    ...item,
+                    percentage: sum > 0 ? Math.round((item.weight / sum) * 100) : 0
+                  }));
+
+                  return items.map((item) => {
+                    const barColor = item.severity === "high" ? "bg-riskHigh" : "bg-riskMedium";
+                    const badgeColor = item.severity === "high" ? "text-riskHigh border-riskHigh/30" : "text-riskMedium border-riskMedium/30";
+                    return (
+                      <div key={`${item.feature}-${item.value}`} className="border border-border bg-base p-3 rounded-[3px] space-y-2 animate-reveal">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-text">{item.feature}</span>
+                          <span className={`soc-mono text-[0.6rem] border px-1.5 py-0.5 uppercase tracking-wider font-bold bg-base/50 ${badgeColor}`}>
+                            {item.severity || "medium"}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[0.68rem] text-muted">
+                            <span>Contribution weight</span>
+                            <span className="font-bold text-text">{item.percentage}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-steel">
+                            <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${item.percentage}%` }} />
+                          </div>
+                        </div>
+
+                        <div className="soc-mono text-xs text-muted leading-4 bg-panel/30 p-1.5 border border-border/40">
+                          {item.value}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>

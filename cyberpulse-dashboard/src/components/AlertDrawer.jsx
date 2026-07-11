@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useMemo } from "react";
 
 function parseContributions(value) {
   if (!value) return [];
@@ -17,7 +18,24 @@ function quantumClass(level) {
 }
 
 export default function AlertDrawer({ alert, onClose }) {
-  const contributions = parseContributions(alert?.feature_contributions);
+  const weightedContributions = useMemo(() => {
+    const raw = parseContributions(alert?.feature_contributions);
+    if (raw.length === 0) return [];
+    
+    // Severity weights: high = 3, medium = 2, default/other = 1
+    const weighted = raw.map(item => {
+      let weight = 1;
+      if (item.severity === "high") weight = 3;
+      else if (item.severity === "medium") weight = 2;
+      return { ...item, weight };
+    });
+    
+    const sum = weighted.reduce((acc, item) => acc + item.weight, 0);
+    return weighted.map(item => ({
+      ...item,
+      percentage: sum > 0 ? Math.round((item.weight / sum) * 100) : 0
+    }));
+  }, [alert]);
 
   return (
     <aside
@@ -75,19 +93,39 @@ export default function AlertDrawer({ alert, onClose }) {
 
             <section>
               <div className="soc-label">Contributing signals</div>
-              <div className="mt-2 space-y-2">
-                {contributions.length === 0 ? (
+              <div className="mt-2 space-y-3">
+                {weightedContributions.length === 0 ? (
                   <div className="text-sm text-muted">No structured feature contribution list returned.</div>
                 ) : (
-                  contributions.map((item) => (
-                    <div key={`${item.feature}-${item.value}`} className="border border-border bg-base px-3 py-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-text">{item.feature}</span>
-                        <span className="soc-mono text-[0.68rem] uppercase text-muted">{item.severity}</span>
+                  weightedContributions.map((item) => {
+                    const barColor = item.severity === "high" ? "bg-riskHigh" : "bg-riskMedium";
+                    const badgeColor = item.severity === "high" ? "text-riskHigh border-riskHigh/30" : "text-riskMedium border-riskMedium/30";
+                    return (
+                      <div key={`${item.feature}-${item.value}`} className="border border-border bg-base p-3 rounded-[3px] space-y-2 animate-reveal">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-text">{item.feature}</span>
+                          <span className={`soc-mono text-[0.6rem] border px-1.5 py-0.5 uppercase tracking-wider font-bold bg-base/50 ${badgeColor}`}>
+                            {item.severity}
+                          </span>
+                        </div>
+                        
+                        {/* Progress Bar & Contribution Percentage */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[0.68rem] text-muted">
+                            <span>Contribution weight</span>
+                            <span className="font-bold text-text">{item.percentage}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-steel">
+                            <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${item.percentage}%` }} />
+                          </div>
+                        </div>
+
+                        <div className="soc-mono text-xs text-muted leading-4 bg-panel/30 p-1.5 border border-border/40">
+                          {item.value}
+                        </div>
                       </div>
-                      <div className="soc-mono mt-1 text-xs text-muted">{item.value}</div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </section>
