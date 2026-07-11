@@ -60,3 +60,20 @@ export function scoreSession(payload) {
     data: payload,
   });
 }
+
+export function getCopilotReport(sessionId) {
+  return request(`/alerts/${encodeURIComponent(sessionId)}/copilot-report`);
+}
+
+export function getPqcPlaybook(sessionId) {
+  return request(`/alerts/${encodeURIComponent(sessionId)}/pqc-playbook`);
+}
+
+export function getStixExportUrl(sessionId) {
+  return `${API_BASE_URL}/alerts/${encodeURIComponent(sessionId)}/stix`;
+}
+
+export function getMuleTrackerData() {
+  return request("/mule-tracker");
+}
+
