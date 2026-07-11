@@ -41,6 +41,17 @@ export function getStats() {
   return request("/stats");
 }
 
+export function updateTriage(sessionId, status, note = "") {
+  return request("/triage", {
+    method: "POST",
+    data: {
+      session_id: sessionId,
+      status,
+      note,
+    },
+  });
+}
+
 export function getAlerts({ minRisk = 0, limit = 1000 } = {}) {
   return request("/alerts", {
     params: {

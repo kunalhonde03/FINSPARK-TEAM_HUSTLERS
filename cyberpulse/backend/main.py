@@ -10,9 +10,43 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+
+def _build_pdf_bytes(title: str, body: str) -> bytes:
+    escaped_title = title.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    lines = body.splitlines() or [""]
+    stream_parts = []
+    y = 770
+    for line in lines[:120]:
+        if y < 40:
+            break
+        escaped = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        stream_parts.append(f"BT /F1 10 Tf 54 {y} Td ({escaped}) Tj ET")
+        y -= 12
+    stream_body = "\n".join(stream_parts)
+    pdf = f"""%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 0 >> stream
+BT /F1 16 Tf 54 760 Td ({escaped_title}) Tj ET
+{stream_body}
+endstream
+endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 6
+0000000000 65535 f \n0000000010 00000 n \n0000000062 00000 n \n0000000119 00000 n \n0000000200 00000 n \n0000000300 00000 n \ntrailer << /Size 6 /Root 1 0 R >>
+startxref
+0
+%%EOF
+"""
+    return pdf.encode("latin-1", errors="ignore")
+
+from cyberpulse.backend.triage_store import apply_triage_state, set_triage_status
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +76,8 @@ ALERT_RESPONSE_COLUMNS = [
     "quantum_risk_level",
     "quantum_risk_explanation",
     "feature_contributions",
+    "triage_status",
+    "triage_note",
     *SESSION_FEATURE_COLUMNS,
 ]
 
@@ -77,6 +113,12 @@ def _payload_dict(payload: BaseModel) -> dict[str, Any]:
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload.dict()
+
+
+class TriageUpdateRequest(BaseModel):
+    session_id: str
+    status: str | None = None
+    note: str | None = None
 
 
 def _json_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -143,6 +185,7 @@ def get_alerts(
     if limit:
         alerts = alerts.head(limit)
 
+    alerts = apply_triage_state(alerts)
     columns = [column for column in ALERT_RESPONSE_COLUMNS if column in alerts.columns]
     return _json_records(alerts[columns])
 
@@ -227,6 +270,35 @@ def score_session(payload: SessionScoreRequest = Body(...)) -> dict[str, Any]:
         "quantum_risk_level": quantum_level,
         "quantum_risk_explanation": quantum_explanation,
     }
+
+
+@app.post("/triage")
+def update_triage(payload: TriageUpdateRequest = Body(...)) -> dict[str, Any]:
+    if not payload.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    entry = set_triage_status(payload.session_id, payload.status, payload.note)
+    return {"session_id": payload.session_id, **entry}
+
+
+@app.get("/export/alerts.{format}")
+def export_alerts(format: str, min_risk: float = Query(0, ge=0, le=100), limit: int | None = Query(None, ge=1, le=20000)) -> Response:
+    data = load_data()
+    alerts = data["alerts"].copy()
+    alerts = alerts[alerts["risk_score"] >= min_risk].sort_values("risk_score", ascending=False)
+    if limit:
+        alerts = alerts.head(limit)
+    alerts = apply_triage_state(alerts)
+
+    if format.lower() == "csv":
+        csv_text = alerts.to_csv(index=False)
+        return Response(content=csv_text, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=cyberpulse_alerts.csv"})
+
+    if format.lower() == "pdf":
+        body = alerts.to_string(index=False)
+        pdf_bytes = _build_pdf_bytes("CyberPulse alerts", body)
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=cyberpulse_alerts.pdf"})
+
+    raise HTTPException(status_code=400, detail="Format must be csv or pdf")
 
 
 @app.get("/stats")

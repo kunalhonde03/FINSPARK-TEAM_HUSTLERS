@@ -45,7 +45,7 @@ function ExplanationCell({ alert, expanded, onToggle }) {
   );
 }
 
-export default function AlertTable({ alerts, loading, error, onSelect }) {
+export default function AlertTable({ alerts, loading, error, onSelect, onTriageChange }) {
   const [sortDir, setSortDir] = useState("desc");
   const [quantumFilter, setQuantumFilter] = useState("All");
   const [startDate, setStartDate] = useState("");
@@ -160,6 +160,7 @@ export default function AlertTable({ alerts, loading, error, onSelect }) {
                 <th className="px-4 py-3 font-semibold">Risk score</th>
                 <th className="px-4 py-3 font-semibold">Explanation</th>
                 <th className="px-4 py-3 font-semibold">Quantum risk</th>
+                <th className="px-4 py-3 font-semibold">Triage</th>
               </tr>
             </thead>
             <tbody>
@@ -210,6 +211,24 @@ export default function AlertTable({ alerts, loading, error, onSelect }) {
                       >
                         {alert.quantum_risk_level || "Unknown"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex flex-col gap-2">
+                        <span className="text-[0.68rem] uppercase tracking-[0.14em] text-muted">
+                          {alert.triage_status || "new"}
+                        </span>
+                        <select
+                          value={alert.triage_status || "new"}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => onTriageChange?.(alert.session_id, event.target.value, alert.triage_note || "")}
+                          className="border border-border bg-base px-2 py-2 font-mono text-sm text-text"
+                        >
+                          <option value="new">New</option>
+                          <option value="investigating">Investigating</option>
+                          <option value="escalated">Escalated</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                      </div>
                     </td>
                   </tr>
                 );
