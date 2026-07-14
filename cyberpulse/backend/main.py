@@ -270,6 +270,64 @@ def get_stats() -> dict[str, Any]:
     return stats
 
 
+@app.get("/crypto-inventory")
+def get_crypto_inventory() -> dict[str, Any]:
+    """Return a simple inventory summary of crypto-related telemetry.
+
+    Produces counts for TLS versions, cipher suites, certificate key-length buckets,
+    and certificate signature algorithms. This is intentionally lightweight and
+    designed for the dashboard to display inventory/coverage metrics.
+    """
+    data = load_data()
+    telemetry = data["telemetry"].copy()
+
+    # Normalize and guard columns
+    tls_series = telemetry.get("tls_version") if "tls_version" in telemetry.columns else None
+    cipher_series = telemetry.get("cipher_suite") if "cipher_suite" in telemetry.columns else None
+    keylen_series = telemetry.get("cert_key_length") if "cert_key_length" in telemetry.columns else None
+    sig_series = telemetry.get("cert_signature_alg") if "cert_signature_alg" in telemetry.columns else None
+
+    def safe_counts(series):
+        if series is None or series.empty:
+            return {}
+        clean = series.fillna("unknown").astype(str).str.strip()
+        return clean.value_counts().to_dict()
+
+    def keylen_buckets(series):
+        if series is None or series.empty:
+            return {}
+        def bucket(v):
+            try:
+                n = int(v)
+            except (TypeError, ValueError):
+                return "unknown"
+            if n < 1024:
+                return "<1024"
+            if n < 2048:
+                return "1024-2047"
+            if n < 4096:
+                return "2048-4095"
+            return ">=4096"
+
+        buckets = series.fillna("unknown").map(bucket)
+        return buckets.value_counts().to_dict()
+
+    inventory = {
+        "total_telemetry_rows": int(len(telemetry)),
+        "tls_versions": safe_counts(tls_series),
+        "cipher_suites": safe_counts(cipher_series),
+        "cert_key_length_buckets": keylen_buckets(keylen_series),
+        "cert_signature_algorithms": safe_counts(sig_series),
+    }
+
+    # Also include a lightweight breakdown by quantum risk levels from alerts if present
+    alerts = data.get("alerts")
+    if alerts is not None and "quantum_risk_level" in alerts.columns:
+        inventory["alerts_by_quantum_risk"] = alerts["quantum_risk_level"].fillna("unknown").value_counts().to_dict()
+
+    return inventory
+
+
 if __name__ == "__main__":
     import uvicorn
 
