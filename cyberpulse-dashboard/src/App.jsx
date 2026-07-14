@@ -7,6 +7,7 @@ import UserTimeline from "./pages/UserTimeline.jsx";
 import Simulate from "./pages/Simulate.jsx";
 import MuleTracker from "./pages/MuleTracker.jsx";
 import Neo4jExplorer from "./pages/Neo4jExplorer.jsx";
+import QuantumRoadmap from "./pages/QuantumRoadmap.jsx";
 
 export default function App() {
   const [backendStatus, setBackendStatus] = useState("checking");
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/simulate" element={<Simulate />} />
           <Route path="/mule-tracker" element={<MuleTracker />} />
           <Route path="/neo4j-explorer" element={<Neo4jExplorer />} />
+          <Route path="/quantum-roadmap" element={<QuantumRoadmap />} />
         </Routes>
       </main>
     </div>

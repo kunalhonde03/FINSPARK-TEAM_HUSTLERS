@@ -72,6 +72,9 @@ export default function PulseHeader({ status, stats, lastChecked }) {
             <NavLink to="/neo4j-explorer" className={navClass}>
               Neo4j 3D Explorer
             </NavLink>
+            <NavLink to="/quantum-roadmap" className={navClass}>
+              Quantum roadmap
+            </NavLink>
           </nav>
 
           <div className="flex items-center gap-3 border border-border bg-panel px-3 py-2">
