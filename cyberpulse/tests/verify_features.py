@@ -4,8 +4,9 @@
 import sys
 from pathlib import Path
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Add project root to path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 print("\n" + "=" * 70)
 print("CYBERPULSE ADVANCED FEATURES - VERIFICATION TEST")
@@ -77,7 +78,7 @@ try:
         text=True
     )
     # On Windows grep might not be available, so we'll just check the file exists
-    client_path = Path("cyberpulse-dashboard/src/api/client.js")
+    client_path = PROJECT_ROOT / "cyberpulse-dashboard" / "src" / "api" / "client.js"
     if client_path.exists():
         content = client_path.read_text()
         if "connectWebSocketAlerts" in content and "getModelMetrics" in content:
