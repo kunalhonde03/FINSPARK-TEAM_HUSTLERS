@@ -24,56 +24,93 @@ export default function MuleTracker() {
     loadMuleData();
   }, []);
 
-  // Compute layout coordinates for a beautiful, responsive bipartite/ring visualization
+  // Compute a force-directed graph layout so the view feels more like a relationship explorer
   const layout = useMemo(() => {
     if (!data.nodes.length) return { nodes: [], links: [] };
 
-    const nodes = [...data.nodes];
-    const links = [...data.links];
-
-    const users = nodes.filter(n => n.type === "user");
-    const beneficiaries = nodes.filter(n => n.type === "beneficiary");
-
     const width = 960;
     const height = 580;
+    const nodes = data.nodes.map((node, index) => ({
+      ...node,
+      x: width / 2,
+      y: height / 2,
+      vx: 0,
+      vy: 0,
+    }));
 
-    const coords = {};
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
-    // Position beneficiaries on the right side in a vertical column
-    beneficiaries.forEach((b, i) => {
-      const x = width * 0.7;
-      const y = height * 0.15 + (i * (height * 0.7)) / Math.max(1, beneficiaries.length - 1);
-      coords[b.id] = { x, y, ...b };
+    nodes.forEach((node, index) => {
+      const angle = (index / Math.max(1, nodes.length)) * Math.PI * 2;
+      const radius = node.type === "beneficiary" ? 120 : 180;
+      node.x = width / 2 + Math.cos(angle) * radius;
+      node.y = height / 2 + Math.sin(angle) * radius;
     });
 
-    // Position users on the left side, grouped near the beneficiaries they connect to
-    users.forEach((u, i) => {
-      // Find the first beneficiary connected to this user to group them
-      const connectedBLink = links.find(l => l.source === u.id);
-      const targetBId = connectedBLink ? connectedBLink.target : null;
-      const targetB = coords[targetBId];
+    const links = data.links
+      .map((link) => ({
+        ...link,
+        sourceNode: nodeById.get(link.source),
+        targetNode: nodeById.get(link.target),
+      }))
+      .filter((link) => link.sourceNode && link.targetNode);
 
-      let x = width * 0.2;
-      let y = height * 0.1 + (i * (height * 0.8)) / Math.max(1, users.length - 1);
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-      if (targetB) {
-        // Pull slightly closer to the target beneficiary
-        x = width * 0.25;
-        // Jitter y slightly around the target's y coordinate to visually cluster them
-        const offset = ((i % 5) - 2) * 45;
-        y = Math.max(40, Math.min(height - 40, targetB.y + offset));
+    for (let step = 0; step < 140; step += 1) {
+      nodes.forEach((node) => {
+        node.vx *= 0.9;
+        node.vy *= 0.9;
+        node.x += node.vx;
+        node.y += node.vy;
+        node.x = clamp(node.x, 40, width - 40);
+        node.y = clamp(node.y, 40, height - 40);
+      });
+
+      for (let i = 0; i < nodes.length; i += 1) {
+        for (let j = i + 1; j < nodes.length; j += 1) {
+          const a = nodes[i];
+          const b = nodes[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          const minDistance = a.type === "beneficiary" || b.type === "beneficiary" ? 110 : 70;
+          if (distance < minDistance) {
+            const force = ((minDistance - distance) / minDistance) * 0.9;
+            const vx = (dx / distance) * force;
+            const vy = (dy / distance) * force;
+            a.vx -= vx;
+            a.vy -= vy;
+            b.vx += vx;
+            b.vy += vy;
+          }
+        }
       }
 
-      coords[u.id] = { x, y, ...u };
-    });
+      links.forEach((link) => {
+        const source = link.sourceNode;
+        const target = link.targetNode;
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const targetDistance = source.type === "beneficiary" || target.type === "beneficiary" ? 220 : 170;
+        const springForce = (distance - targetDistance) * 0.006;
+        const nx = (dx / distance) * springForce;
+        const ny = (dy / distance) * springForce;
+        source.vx -= nx;
+        source.vy -= ny;
+        target.vx += nx;
+        target.vy += ny;
+      });
+    }
 
     return {
-      nodes: Object.values(coords),
-      links: links.map(l => ({
-        ...l,
-        sourceNode: coords[l.source],
-        targetNode: coords[l.target]
-      })).filter(l => l.sourceNode && l.targetNode)
+      nodes: nodes.map((node) => ({ ...node })),
+      links: links.map((link) => ({
+        ...link,
+        sourceNode: nodeById.get(link.source),
+        targetNode: nodeById.get(link.target),
+      })),
     };
   }, [data]);
 

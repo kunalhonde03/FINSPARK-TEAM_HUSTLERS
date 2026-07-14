@@ -77,3 +77,32 @@ export function getMuleTrackerData() {
   return request("/mule-tracker");
 }
 
+export function getNeo4jStatus() {
+  return request("/neo4j/status");
+}
+
+export function saveNeo4jConfig(config) {
+  return request("/neo4j/config", {
+    method: "POST",
+    data: config,
+  });
+}
+
+export function syncNeo4jDatabase() {
+  return request("/neo4j/sync", {
+    method: "POST",
+  });
+}
+
+export function getNeo4jGraph() {
+  return request("/neo4j/graph");
+}
+
+export function runCypherQuery(cypherQuery) {
+  return request("/neo4j/query", {
+    method: "POST",
+    data: { query: cypherQuery },
+  });
+}
+
+
