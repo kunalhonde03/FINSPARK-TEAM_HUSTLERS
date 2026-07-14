@@ -6,6 +6,8 @@ import Overview from "./pages/Overview.jsx";
 import UserTimeline from "./pages/UserTimeline.jsx";
 import Simulate from "./pages/Simulate.jsx";
 import Methodology from "./pages/Methodology.jsx";
+import MuleTracker from "./pages/MuleTracker.jsx";
+import Neo4jExplorer from "./pages/Neo4jExplorer.jsx";
 import QuantumRoadmap from "./pages/QuantumRoadmap.jsx";
 
 export default function App() {
@@ -48,9 +50,12 @@ export default function App() {
           <Route path="/user/:id" element={<UserTimeline />} />
           <Route path="/simulate" element={<Simulate />} />
           <Route path="/methodology" element={<Methodology />} />
+          <Route path="/mule-tracker" element={<MuleTracker />} />
+          <Route path="/neo4j-explorer" element={<Neo4jExplorer />} />
           <Route path="/quantum-roadmap" element={<QuantumRoadmap />} />
         </Routes>
       </main>
     </div>
   );
 }
+

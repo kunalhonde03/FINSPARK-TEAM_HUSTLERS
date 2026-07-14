@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,8 @@ ALERT_RESPONSE_COLUMNS = [
     "quantum_risk_level",
     "quantum_risk_explanation",
     "feature_contributions",
+    "triage_status",
+    "triage_note",
     *SESSION_FEATURE_COLUMNS,
 ]
 
@@ -77,6 +80,20 @@ def _payload_dict(payload: BaseModel) -> dict[str, Any]:
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload.dict()
+
+
+class TriageUpdateRequest(BaseModel):
+    session_id: str
+    status: str | None = None
+    note: str | None = None
+
+
+class NotificationRuleRequest(BaseModel):
+    name: str
+    condition_type: str
+    condition_value: Any
+    notification_target: str
+    enabled: bool = True
 
 
 def _json_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -135,14 +152,58 @@ def health() -> dict[str, str]:
 @app.get("/alerts")
 def get_alerts(
     min_risk: float = Query(0, ge=0, le=100),
+    max_risk: float = Query(100, ge=0, le=100),
+    quantum_risk_level: str | None = Query(None),
+    user_id: str | None = Query(None),
+    triage_status: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     limit: int | None = Query(None, ge=1, le=20000),
 ) -> list[dict[str, Any]]:
+    """Get alerts with advanced filtering.
+    
+    Filters:
+    - min_risk/max_risk: Risk score range (0-100)
+    - quantum_risk_level: High, Medium, Low
+    - user_id: Specific user
+    - triage_status: new, investigating, escalated, resolved
+    - start_date/end_date: ISO format dates (YYYY-MM-DD)
+    - limit: Max results to return
+    """
     data = load_data()
     alerts = data["alerts"].copy()
-    alerts = alerts[alerts["risk_score"] >= min_risk].sort_values("risk_score", ascending=False)
+    
+    # Apply risk score filter
+    alerts = alerts[(alerts["risk_score"] >= min_risk) & (alerts["risk_score"] <= max_risk)]
+    
+    # Apply quantum risk filter
+    if quantum_risk_level and "quantum_risk_level" in alerts.columns:
+        alerts = alerts[alerts["quantum_risk_level"] == quantum_risk_level]
+    
+    # Apply user filter
+    if user_id:
+        alerts = alerts[alerts["user_id"] == user_id]
+    
+    # Apply triage status filter
+    alerts = apply_triage_state(alerts)
+    if triage_status:
+        alerts = alerts[alerts["triage_status"] == triage_status]
+    
+    # Apply date range filter
+    if start_date or end_date:
+        alerts["session_start"] = _parse_timestamps(alerts["session_start"])
+        if start_date:
+            start_dt = pd.to_datetime(start_date)
+            alerts = alerts[alerts["session_start"] >= start_dt]
+        if end_date:
+            end_dt = pd.to_datetime(end_date)
+            alerts = alerts[alerts["session_start"] <= end_dt]
+    
+    # Sort and limit
+    alerts = alerts.sort_values("risk_score", ascending=False)
     if limit:
         alerts = alerts.head(limit)
-
+    
     columns = [column for column in ALERT_RESPONSE_COLUMNS if column in alerts.columns]
     return _json_records(alerts[columns])
 
@@ -229,6 +290,35 @@ def score_session(payload: SessionScoreRequest = Body(...)) -> dict[str, Any]:
     }
 
 
+@app.post("/triage")
+def update_triage(payload: TriageUpdateRequest = Body(...)) -> dict[str, Any]:
+    if not payload.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    entry = set_triage_status(payload.session_id, payload.status, payload.note)
+    return {"session_id": payload.session_id, **entry}
+
+
+@app.get("/export/alerts.{format}")
+def export_alerts(format: str, min_risk: float = Query(0, ge=0, le=100), limit: int | None = Query(None, ge=1, le=20000)) -> Response:
+    data = load_data()
+    alerts = data["alerts"].copy()
+    alerts = alerts[alerts["risk_score"] >= min_risk].sort_values("risk_score", ascending=False)
+    if limit:
+        alerts = alerts.head(limit)
+    alerts = apply_triage_state(alerts)
+
+    if format.lower() == "csv":
+        csv_text = alerts.to_csv(index=False)
+        return Response(content=csv_text, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=cyberpulse_alerts.csv"})
+
+    if format.lower() == "pdf":
+        body = alerts.to_string(index=False)
+        pdf_bytes = _build_pdf_bytes("CyberPulse alerts", body)
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=cyberpulse_alerts.pdf"})
+
+    raise HTTPException(status_code=400, detail="Format must be csv or pdf")
+
+
 @app.get("/stats")
 def get_stats() -> dict[str, Any]:
     data = load_data()
@@ -270,65 +360,8 @@ def get_stats() -> dict[str, Any]:
     return stats
 
 
-@app.get("/crypto-inventory")
-def get_crypto_inventory() -> dict[str, Any]:
-    """Return a simple inventory summary of crypto-related telemetry.
-
-    Produces counts for TLS versions, cipher suites, certificate key-length buckets,
-    and certificate signature algorithms. This is intentionally lightweight and
-    designed for the dashboard to display inventory/coverage metrics.
-    """
-    data = load_data()
-    telemetry = data["telemetry"].copy()
-
-    # Normalize and guard columns
-    tls_series = telemetry.get("tls_version") if "tls_version" in telemetry.columns else None
-    cipher_series = telemetry.get("cipher_suite") if "cipher_suite" in telemetry.columns else None
-    keylen_series = telemetry.get("cert_key_length") if "cert_key_length" in telemetry.columns else None
-    sig_series = telemetry.get("cert_signature_alg") if "cert_signature_alg" in telemetry.columns else None
-
-    def safe_counts(series):
-        if series is None or series.empty:
-            return {}
-        clean = series.fillna("unknown").astype(str).str.strip()
-        return clean.value_counts().to_dict()
-
-    def keylen_buckets(series):
-        if series is None or series.empty:
-            return {}
-        def bucket(v):
-            try:
-                n = int(v)
-            except (TypeError, ValueError):
-                return "unknown"
-            if n < 1024:
-                return "<1024"
-            if n < 2048:
-                return "1024-2047"
-            if n < 4096:
-                return "2048-4095"
-            return ">=4096"
-
-        buckets = series.fillna("unknown").map(bucket)
-        return buckets.value_counts().to_dict()
-
-    inventory = {
-        "total_telemetry_rows": int(len(telemetry)),
-        "tls_versions": safe_counts(tls_series),
-        "cipher_suites": safe_counts(cipher_series),
-        "cert_key_length_buckets": keylen_buckets(keylen_series),
-        "cert_signature_algorithms": safe_counts(sig_series),
-    }
-
-    # Also include a lightweight breakdown by quantum risk levels from alerts if present
-    alerts = data.get("alerts")
-    if alerts is not None and "quantum_risk_level" in alerts.columns:
-        inventory["alerts_by_quantum_risk"] = alerts["quantum_risk_level"].fillna("unknown").value_counts().to_dict()
-
-    return inventory
-
-
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("cyberpulse.backend.main:app", host="127.0.0.1", port=8000, reload=False)
+

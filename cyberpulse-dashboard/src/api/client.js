@@ -41,10 +41,27 @@ export function getStats() {
   return request("/stats");
 }
 
-export function getAlerts({ minRisk = 0, limit = 1000 } = {}) {
+export function updateTriage(sessionId, status, note = "") {
+  return request("/triage", {
+    method: "POST",
+    data: {
+      session_id: sessionId,
+      status,
+      note,
+    },
+  });
+}
+
+export function getAlerts({ minRisk = 0, maxRisk = 100, quantumRiskLevel = null, userId = null, triageStatus = null, startDate = null, endDate = null, limit = 1000 } = {}) {
   return request("/alerts", {
     params: {
       min_risk: minRisk,
+      max_risk: maxRisk,
+      quantum_risk_level: quantumRiskLevel,
+      user_id: userId,
+      triage_status: triageStatus,
+      start_date: startDate,
+      end_date: endDate,
       limit,
     },
   });
@@ -63,4 +80,155 @@ export function scoreSession(payload) {
     method: "POST",
     data: payload,
   });
+}
+
+export function getCopilotReport(sessionId) {
+  return request(`/alerts/${encodeURIComponent(sessionId)}/copilot-report`);
+}
+
+export function getPqcPlaybook(sessionId) {
+  return request(`/alerts/${encodeURIComponent(sessionId)}/pqc-playbook`);
+}
+
+export function getStixExportUrl(sessionId) {
+  return `${API_BASE_URL}/alerts/${encodeURIComponent(sessionId)}/stix`;
+}
+
+export function getMuleTrackerData() {
+  return request("/mule-tracker");
+}
+
+export function getNeo4jStatus() {
+  return request("/neo4j/status");
+}
+
+export function saveNeo4jConfig(config) {
+  return request("/neo4j/config", {
+    method: "POST",
+    data: config,
+  });
+}
+
+export function syncNeo4jDatabase() {
+  return request("/neo4j/sync", {
+    method: "POST",
+  });
+}
+
+// ========== NOTIFICATION RULES ENDPOINTS ==========
+
+export function listNotificationRules() {
+  return request("/notification-rules");
+}
+
+export function createNotificationRule({ name, condition_type, condition_value, notification_target, enabled = true }) {
+  return request("/notification-rules", {
+    method: "POST",
+    data: {
+      name,
+      condition_type,
+      condition_value,
+      notification_target,
+      enabled,
+    },
+  });
+}
+
+export function deleteNotificationRule(ruleId) {
+  return request(`/notification-rules/${encodeURIComponent(ruleId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function testNotificationRule(alertPayload) {
+  return request("/notification-rules/test", {
+    method: "POST",
+    data: alertPayload,
+  });
+}
+
+// ========== MODEL METRICS ENDPOINTS ==========
+
+export function getModelMetrics(limit = 10) {
+  return request("/model/metrics", {
+    params: { limit },
+  });
+}
+
+export function getModelPerformance() {
+  return request("/model/performance");
+}
+
+export function recordModelMetrics() {
+  return request("/model/metrics/record", {
+    method: "POST",
+  });
+}
+
+export function getNeo4jGraph() {
+  return request("/neo4j/graph");
+}
+
+export function runCypherQuery(cypherQuery) {
+  return request("/neo4j/query", {
+    method: "POST",
+    data: { query: cypherQuery },
+  });
+}
+
+export function checkDistributionDrift(shiftThreshold = 0.15) {
+  return request("/model/drift-detection", {
+    params: { shift_threshold: shiftThreshold },
+  });
+}
+
+export function getLatestHighRiskAlerts(minRisk = 80) {
+  return request("/model/alerts-stream/latest", {
+    params: { min_risk: minRisk },
+  });
+}
+
+// ========== WEBSOCKET ALERTS ==========
+
+let alertWebSocket = null;
+
+export function connectWebSocketAlerts(onMessage, onError = null) {
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws/alerts`;
+  
+  try {
+    alertWebSocket = new WebSocket(wsUrl);
+    
+    alertWebSocket.onmessage = (event) => {
+      try {
+        const alert = JSON.parse(event.data);
+        onMessage(alert);
+      } catch (e) {
+        console.error("Failed to parse WebSocket message:", e);
+      }
+    };
+    
+    alertWebSocket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      if (onError) onError(error);
+    };
+    
+    alertWebSocket.onclose = () => {
+      console.log("WebSocket disconnected");
+      alertWebSocket = null;
+    };
+    
+    return alertWebSocket;
+  } catch (error) {
+    console.error("Failed to create WebSocket:", error);
+    if (onError) onError(error);
+    return null;
+  }
+}
+
+export function disconnectWebSocketAlerts() {
+  if (alertWebSocket && alertWebSocket.readyState === WebSocket.OPEN) {
+    alertWebSocket.close();
+    alertWebSocket = null;
+  }
 }

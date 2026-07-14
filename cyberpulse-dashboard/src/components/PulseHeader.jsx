@@ -69,6 +69,12 @@ export default function PulseHeader({ status, stats, lastChecked }) {
             <NavLink to="/methodology" className={navClass}>
               Methodology
             </NavLink>
+            <NavLink to="/mule-tracker" className={navClass}>
+              Mule Tracker
+            </NavLink>
+            <NavLink to="/neo4j-explorer" className={navClass}>
+              Neo4j 3D Explorer
+            </NavLink>
             <NavLink to="/quantum-roadmap" className={navClass}>
               Quantum roadmap
             </NavLink>
