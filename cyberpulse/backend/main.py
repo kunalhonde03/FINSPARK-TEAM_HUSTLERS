@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import os
+
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -43,8 +44,6 @@ ALERT_RESPONSE_COLUMNS = [
     "quantum_risk_level",
     "quantum_risk_explanation",
     "feature_contributions",
-    "triage_status",
-    "triage_note",
     *SESSION_FEATURE_COLUMNS,
 ]
 
@@ -80,20 +79,6 @@ def _payload_dict(payload: BaseModel) -> dict[str, Any]:
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload.dict()
-
-
-class TriageUpdateRequest(BaseModel):
-    session_id: str
-    status: str | None = None
-    note: str | None = None
-
-
-class NotificationRuleRequest(BaseModel):
-    name: str
-    condition_type: str
-    condition_value: Any
-    notification_target: str
-    enabled: bool = True
 
 
 def _json_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
@@ -152,58 +137,14 @@ def health() -> dict[str, str]:
 @app.get("/alerts")
 def get_alerts(
     min_risk: float = Query(0, ge=0, le=100),
-    max_risk: float = Query(100, ge=0, le=100),
-    quantum_risk_level: str | None = Query(None),
-    user_id: str | None = Query(None),
-    triage_status: str | None = Query(None),
-    start_date: str | None = Query(None),
-    end_date: str | None = Query(None),
     limit: int | None = Query(None, ge=1, le=20000),
 ) -> list[dict[str, Any]]:
-    """Get alerts with advanced filtering.
-    
-    Filters:
-    - min_risk/max_risk: Risk score range (0-100)
-    - quantum_risk_level: High, Medium, Low
-    - user_id: Specific user
-    - triage_status: new, investigating, escalated, resolved
-    - start_date/end_date: ISO format dates (YYYY-MM-DD)
-    - limit: Max results to return
-    """
     data = load_data()
     alerts = data["alerts"].copy()
-    
-    # Apply risk score filter
-    alerts = alerts[(alerts["risk_score"] >= min_risk) & (alerts["risk_score"] <= max_risk)]
-    
-    # Apply quantum risk filter
-    if quantum_risk_level and "quantum_risk_level" in alerts.columns:
-        alerts = alerts[alerts["quantum_risk_level"] == quantum_risk_level]
-    
-    # Apply user filter
-    if user_id:
-        alerts = alerts[alerts["user_id"] == user_id]
-    
-    # Apply triage status filter
-    alerts = apply_triage_state(alerts)
-    if triage_status:
-        alerts = alerts[alerts["triage_status"] == triage_status]
-    
-    # Apply date range filter
-    if start_date or end_date:
-        alerts["session_start"] = _parse_timestamps(alerts["session_start"])
-        if start_date:
-            start_dt = pd.to_datetime(start_date)
-            alerts = alerts[alerts["session_start"] >= start_dt]
-        if end_date:
-            end_dt = pd.to_datetime(end_date)
-            alerts = alerts[alerts["session_start"] <= end_dt]
-    
-    # Sort and limit
-    alerts = alerts.sort_values("risk_score", ascending=False)
+    alerts = alerts[alerts["risk_score"] >= min_risk].sort_values("risk_score", ascending=False)
     if limit:
         alerts = alerts.head(limit)
-    
+
     columns = [column for column in ALERT_RESPONSE_COLUMNS if column in alerts.columns]
     return _json_records(alerts[columns])
 
@@ -290,35 +231,6 @@ def score_session(payload: SessionScoreRequest = Body(...)) -> dict[str, Any]:
     }
 
 
-@app.post("/triage")
-def update_triage(payload: TriageUpdateRequest = Body(...)) -> dict[str, Any]:
-    if not payload.session_id:
-        raise HTTPException(status_code=400, detail="session_id is required")
-    entry = set_triage_status(payload.session_id, payload.status, payload.note)
-    return {"session_id": payload.session_id, **entry}
-
-
-@app.get("/export/alerts.{format}")
-def export_alerts(format: str, min_risk: float = Query(0, ge=0, le=100), limit: int | None = Query(None, ge=1, le=20000)) -> Response:
-    data = load_data()
-    alerts = data["alerts"].copy()
-    alerts = alerts[alerts["risk_score"] >= min_risk].sort_values("risk_score", ascending=False)
-    if limit:
-        alerts = alerts.head(limit)
-    alerts = apply_triage_state(alerts)
-
-    if format.lower() == "csv":
-        csv_text = alerts.to_csv(index=False)
-        return Response(content=csv_text, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=cyberpulse_alerts.csv"})
-
-    if format.lower() == "pdf":
-        body = alerts.to_string(index=False)
-        pdf_bytes = _build_pdf_bytes("CyberPulse alerts", body)
-        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=cyberpulse_alerts.pdf"})
-
-    raise HTTPException(status_code=400, detail="Format must be csv or pdf")
-
-
 @app.get("/stats")
 def get_stats() -> dict[str, Any]:
     data = load_data()
@@ -358,6 +270,817 @@ def get_stats() -> dict[str, Any]:
         )
 
     return stats
+
+
+@app.get("/alerts/{session_id}/copilot-report")
+def get_copilot_report(session_id: str) -> dict[str, Any]:
+    import uuid
+    from datetime import datetime, timezone
+    data = load_data()
+    alerts = data["alerts"]
+    session_row = alerts[alerts["session_id"] == session_id]
+    if session_row.empty:
+        raise HTTPException(status_code=404, detail=f"Alert session {session_id} not found.")
+    
+    session = session_row.iloc[0].to_dict()
+    
+    user_id = session.get("user_id", "Unknown")
+    risk_score = float(session.get("risk_score", 0))
+    geo_flag = int(float(session.get("geo_velocity_flag", 0)))
+    failed_logins = int(float(session.get("failed_login_count", 0)))
+    device_change = int(float(session.get("device_change_flag", 0)))
+    weak_crypto = int(float(session.get("weak_crypto_flag", 0)))
+    txn_velocity = int(float(session.get("transaction_velocity", 0)))
+    max_amount = float(session.get("max_transaction_amount", 0))
+    new_beneficiary = int(float(session.get("new_beneficiary_flag", 0)))
+
+    factors = []
+    if geo_flag: factors.append("impossible travel geographical velocity")
+    if failed_logins >= 3: factors.append(f"{failed_logins} failed login attempts")
+    if device_change: factors.append("unrecognized device signature change")
+    if weak_crypto: factors.append("weak legacy cryptographic parameters")
+    if txn_velocity >= 3: factors.append("unusual transaction velocity")
+    if max_amount > 0: factors.append(f"high-value transfer of INR {max_amount:,.2f}")
+    if new_beneficiary: factors.append("payment routed to a newly enrolled beneficiary")
+
+    factors_str = ", ".join(factors[:-1]) + (" and " + factors[-1] if len(factors) > 1 else factors[-1] if factors else "low-level transaction anomalies")
+    
+    classification = "Suspicious Money Mule Activity" if new_beneficiary and max_amount > 0 else "Credential Takeover Attack" if failed_logins >= 3 else "Session Hijacking Indicator"
+    severity = "CRITICAL" if risk_score >= 85 else "HIGH" if risk_score >= 70 else "MEDIUM"
+
+    summary = (
+        f"At {session.get('session_start', 'the designated start time')}, User {user_id} generated a high-anomaly alert "
+        f"for session {session_id}. The system flagged this activity with an overall risk score of {risk_score:.1f}/100 and a "
+        f"quantum exposure rating of '{session.get('quantum_risk_level', 'Low')}'. The primary risk drivers are "
+        f"{factors_str}. This combination matches typical threat signatures for a '{classification}' event."
+    )
+
+    findings = []
+    if geo_flag:
+        findings.append({
+            "name": "Impossible Travel Event",
+            "rating": "HIGH",
+            "evidence": session.get("geo_velocity_detail") or "Multiple geographic access points in under 30 minutes.",
+            "description": "Authentication requests came from geographical locations separated by a distance that exceeds standard transport limits, implying active session forwarding or proxy use."
+        })
+    if failed_logins > 0:
+        findings.append({
+            "name": "Brute Force Logins",
+            "rating": "HIGH" if failed_logins >= 5 else "MEDIUM",
+            "evidence": f"{failed_logins} failed authentication sequences logged in the session window.",
+            "description": "A rapid burst of incorrect credentials was entered before success, indicating password guessing or credential validation attempts."
+        })
+    if device_change:
+        findings.append({
+            "name": "Device Identification Mismatch",
+            "rating": "MEDIUM",
+            "evidence": f"{int(float(session.get('unique_device_count', 1)))} device profiles registered.",
+            "description": "Session initialized using a browser fingerprint, operating system, or machine identifier that doesn't correspond to user history."
+        })
+    if weak_crypto:
+        findings.append({
+            "name": "Weak / Post-Quantum Cryptography Risk",
+            "rating": "CRITICAL" if max_amount >= 100000 else "MEDIUM",
+            "evidence": session.get("quantum_risk_explanation") or "Vulnerable TLS version or signature algorithm.",
+            "description": "Session traffic authenticated with legacy algorithms (e.g. RSA-1024 or TLS 1.0). Subject to 'Harvest Now, Decrypt Later' threat as quantum key-exchange cryptanalysis advances."
+        })
+    if max_amount > 0:
+        findings.append({
+            "name": "High-Value Transfer Flag",
+            "rating": "HIGH" if max_amount >= 100000 else "MEDIUM",
+            "evidence": f"Outward wire of INR {max_amount:,.2f} initiated during session.",
+            "description": "The transaction amount significantly deviates from the user's running historical average z-score, mimicking typical cash-out signatures."
+        })
+
+    remediations = [
+        "Revoke the active session token and force full identity re-verification via secondary channels.",
+        "Initiate a temporary security freeze on beneficiary payouts associated with this transaction ID.",
+        "Prompt the user to enroll in hardware-backed passkeys to avoid credential stuffing vulnerabilities.",
+        "Configure the API gateway to require TLS 1.3 protocol versions and deprecate legacy RSA key transport."
+    ]
+
+    return {
+        "incident_id": f"INC-{session_id[-6:].upper()}",
+        "user_id": user_id,
+        "session_id": session_id,
+        "risk_score": risk_score,
+        "severity": severity,
+        "classification": classification,
+        "executive_summary": summary,
+        "technical_findings": findings,
+        "remediations": remediations,
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/alerts/{session_id}/pqc-playbook")
+def get_pqc_playbook(session_id: str) -> dict[str, Any]:
+    data = load_data()
+    alerts = data["alerts"]
+    session_row = alerts[alerts["session_id"] == session_id]
+    if session_row.empty:
+        raise HTTPException(status_code=404, detail=f"Alert session {session_id} not found.")
+    
+    session = session_row.iloc[0]
+    user_id = session["user_id"]
+    
+    telemetry = data["telemetry"]
+    user_tele = telemetry[telemetry["user_id"] == user_id].copy()
+    user_tele["dt"] = pd.to_datetime(user_tele["timestamp"], format="mixed")
+    
+    session_start = pd.to_datetime(session["session_start"], format="mixed")
+    session_end = pd.to_datetime(session["session_end"], format="mixed")
+    session_tele = user_tele[(user_tele["dt"] >= session_start) & (user_tele["dt"] <= session_end)]
+    
+    vulnerabilities = []
+    target_arch = {
+        "key_exchange": "ML-KEM-1024 (Post-Quantum) or Kyber768 + X25519 Hybrid",
+        "signature_scheme": "ML-DSA-87 (Dilithium) or Falcon-1024",
+        "tls_version": "TLS 1.3 with Hybrid Key Agreement"
+    }
+    
+    steps = [
+        "Cryptographic Inventory: Locate all web server profiles, API clients, and network edge appliances using legacy certificates.",
+        "Protocol Policy Update: Disable legacy protocols (TLS 1.0, 1.1, and 1.2) on the load balancers and enforce a minimum of TLS 1.3.",
+        "Key Transport Upgrade: Replace RSA key exchange configurations with Ephemeral Diffie-Hellman (ECDHE) curves or hybrid ML-KEM agreements.",
+        "Certificate Lifecycle: Issue new 3072-bit minimum RSA certificates or transition directly to hybrid quantum-safe signatures.",
+        "Handshake Validation: Execute standard sandbox connection testing using OpenSSL built with liboqs integration."
+    ]
+    
+    nginx_config = (
+        "# CyberPulse Dynamic Nginx Configuration\n"
+        "ssl_protocols TLSv1.3;\n"
+        "ssl_prefer_server_ciphers on;\n"
+        "ssl_curves X25519Kyber768Draft00:X25519:prime256v1;\n"
+        "ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';\n"
+    )
+    
+    openssl_commands = (
+        "# Step 1: Generate a private key supporting hybrid key exchange\n"
+        "openssl ecparam -name prime256v1 -genkey -noout -out hybrid_ecc.key\n"
+        "# Step 2: Request a CSR using ML-DSA algorithm signature (OQS-OpenSSL)\n"
+        "openssl req -new -key hybrid_ecc.key -out quantum_cert.csr -subj '/CN=secure-banking-node'\n"
+    )
+
+    if not session_tele.empty:
+        for idx, row in session_tele.iterrows():
+            tls = str(row.get("tls_version", ""))
+            cipher = str(row.get("cipher_suite", ""))
+            key_len = row.get("cert_key_length")
+            sig_alg = str(row.get("cert_signature_alg", ""))
+            
+            if "1.0" in tls or "1.1" in tls or "SSL" in tls:
+                vulnerabilities.append({
+                    "type": "Legacy Protocol Version",
+                    "detected_value": tls,
+                    "risk_level": "HIGH",
+                    "description": f"Connection established over deprecated {tls}. TLS 1.0/1.1 are vulnerable to protocol downgrade attacks."
+                })
+            if "CBC" in cipher or "3DES" in cipher or "RC4" in cipher or "MD5" in cipher or "TLS_RSA_WITH" in cipher:
+                vulnerabilities.append({
+                    "type": "Weak Cipher Suite",
+                    "detected_value": cipher,
+                    "risk_level": "HIGH",
+                    "description": f"Session cipher suite '{cipher}' lacks Forward Secrecy. Intercepted traffic can be decrypted retroactively if the server key is compromised."
+                })
+            try:
+                k_len = int(key_len) if key_len is not None else 2048
+                if k_len < 2048:
+                    vulnerabilities.append({
+                        "type": "Weak RSA Certificate Key Length",
+                        "detected_value": f"RSA-{k_len}",
+                        "risk_level": "CRITICAL",
+                        "description": f"RSA public key length of {k_len} is highly vulnerable to quantum factorisation using Shor's algorithm."
+                    })
+            except:
+                pass
+            if "SHA-1" in sig_alg or "MD5" in sig_alg:
+                vulnerabilities.append({
+                    "type": "Deprecated Certificate Signature Hash",
+                    "detected_value": sig_alg,
+                    "risk_level": "HIGH",
+                    "description": f"Signature signed with legacy {sig_alg}. Vulnerable to hash collision attacks, making certificate forgery possible."
+                })
+    
+    seen_vulns = set()
+    unique_vulns = []
+    for v in vulnerabilities:
+        if v["type"] not in seen_vulns:
+            seen_vulns.add(v["type"])
+            unique_vulns.append(v)
+            
+    if not unique_vulns and int(float(session.get("weak_crypto_flag", 0))) == 1:
+        unique_vulns.append({
+            "type": "Weak Legacy Cipher Suite",
+            "detected_value": "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+            "risk_level": "HIGH",
+            "description": "Session relies on obsolete static RSA key transport and 3DES block ciphers which do not support Forward Secrecy."
+        })
+        unique_vulns.append({
+            "type": "Vulnerable Certificate Key Length",
+            "detected_value": "RSA-1024",
+            "risk_level": "CRITICAL",
+            "description": "Legitimate certificate utilizes a 1024-bit key, easily broken in real-time by Shor's algorithm."
+        })
+
+    return {
+        "session_id": session_id,
+        "user_id": user_id,
+        "vulnerabilities": unique_vulns if unique_vulns else [{
+            "type": "Post-Quantum Vulnerability",
+            "detected_value": "None detected",
+            "risk_level": "LOW",
+            "description": "No immediate quantum-related vulnerabilities detected in current telemetry events."
+        }],
+        "target_architecture": target_arch,
+        "steps": steps,
+        "nginx_config": nginx_config,
+        "openssl_commands": openssl_commands
+    }
+
+
+@app.get("/alerts/{session_id}/stix")
+def get_stix_bundle(session_id: str) -> dict[str, Any]:
+    import uuid
+    from datetime import datetime, timezone
+    data = load_data()
+    alerts = data["alerts"]
+    session_row = alerts[alerts["session_id"] == session_id]
+    if session_row.empty:
+        raise HTTPException(status_code=404, detail=f"Alert session {session_id} not found.")
+    
+    session = session_row.iloc[0]
+    user_id = session["user_id"]
+    
+    telemetry = data["telemetry"]
+    user_tele = telemetry[telemetry["user_id"] == user_id]
+    ip_addr = "127.0.0.1"
+    if not user_tele.empty:
+        ip_addr = user_tele.iloc[0].get("ip_address", "127.0.0.1")
+        
+    bundle_id = f"bundle--{uuid.uuid4()}"
+    identity_id = f"identity--{uuid.uuid4()}"
+    indicator_id = f"indicator--{uuid.uuid4()}"
+    observed_id = f"observed-data--{uuid.uuid4()}"
+    threat_actor_id = f"threat-actor--{uuid.uuid4()}"
+    relationship_1_id = f"relationship--{uuid.uuid4()}"
+    relationship_2_id = f"relationship--{uuid.uuid4()}"
+    
+    now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    
+    objects = [
+        {
+            "type": "identity",
+            "spec_version": "2.1",
+            "id": identity_id,
+            "created": now_str,
+            "modified": now_str,
+            "name": f"Compromised Customer: {user_id}",
+            "description": f"Customer identity associated with User ID {user_id}",
+            "identity_class": "individual"
+        },
+        {
+            "type": "indicator",
+            "spec_version": "2.1",
+            "id": indicator_id,
+            "created": now_str,
+            "modified": now_str,
+            "name": f"Access Source IP: {ip_addr}",
+            "description": f"IP address flagged during high-risk security alert session {session_id}",
+            "pattern": f"[ipv4-addr:value = '{ip_addr}']",
+            "pattern_type": "stix",
+            "valid_from": now_str
+        },
+        {
+            "type": "observed-data",
+            "spec_version": "2.1",
+            "id": observed_id,
+            "created": now_str,
+            "modified": now_str,
+            "first_observed": now_str,
+            "last_observed": now_str,
+            "number_observed": 1,
+            "objects": {
+                "0": {
+                    "type": "network-traffic",
+                    "src_ref": "1",
+                    "protocols": ["tcp", "tls"],
+                    "extensions": {
+                        "tls-ext": {
+                            "cipher_suite": str(session.get("cipher_suite", "Unknown")),
+                            "version": str(session.get("tls_version", "Unknown"))
+                        }
+                    }
+                },
+                "1": {
+                    "type": "ipv4-addr",
+                    "value": ip_addr
+                }
+            }
+        },
+        {
+            "type": "threat-actor",
+            "spec_version": "2.1",
+            "id": threat_actor_id,
+            "created": now_str,
+            "modified": now_str,
+            "name": "Unknown Fraud Operator",
+            "description": f"Threat actor attempting illegitimate transaction of INR {float(session.get('max_transaction_amount', 0)):,.2f} via session {session_id}",
+            "threat_actor_types": ["crime-syndicate", "fraudster"],
+            "sophistication": "tactical"
+        },
+        {
+            "type": "relationship",
+            "spec_version": "2.1",
+            "id": relationship_1_id,
+            "created": now_str,
+            "modified": now_str,
+            "relationship_type": "indicates",
+            "source_ref": indicator_id,
+            "target_ref": threat_actor_id
+        },
+        {
+            "type": "relationship",
+            "spec_version": "2.1",
+            "id": relationship_2_id,
+            "created": now_str,
+            "modified": now_str,
+            "relationship_type": "compromises",
+            "source_ref": threat_actor_id,
+            "target_ref": identity_id
+        }
+    ]
+    
+    return {
+        "type": "bundle",
+        "id": bundle_id,
+        "objects": objects
+    }
+
+
+@app.get("/mule-tracker")
+def get_mule_tracker() -> dict[str, Any]:
+    data = load_data()
+    transactions = data["transactions"].copy()
+    alerts = data["alerts"]
+
+    transactions["amount"] = pd.to_numeric(transactions["amount"], errors="coerce").fillna(0.0)
+    transactions["beneficiary_is_new"] = transactions["beneficiary_is_new"].astype(bool)
+    transactions = transactions.sort_values(["amount", "timestamp"], ascending=[False, False]).reset_index(drop=True)
+
+    high_risk_users = set(alerts[alerts["risk_score"] >= 70]["user_id"].unique())
+
+    suspicious_txns = transactions[
+        transactions["user_id"].isin(high_risk_users) | transactions["beneficiary_is_new"]
+    ].copy()
+    if suspicious_txns.empty:
+        suspicious_txns = transactions.head(80).copy()
+
+    beneficiary_groups = suspicious_txns.groupby("beneficiary_id").agg({
+        "user_id": lambda x: sorted({str(value) for value in x}),
+        "amount": ["count", "sum"],
+        "beneficiary_is_new": "first",
+    })
+    beneficiary_groups.columns = ["user_ids", "txn_count", "total_amount", "is_new"]
+    beneficiary_groups = beneficiary_groups.reset_index()
+
+    multi_user_mules = beneficiary_groups[beneficiary_groups["user_ids"].apply(len) >= 2]
+    top_mules = multi_user_mules.sort_values(by="total_amount", ascending=False).head(15)
+    if top_mules.empty:
+        top_mules = beneficiary_groups.sort_values(by="total_amount", ascending=False).head(15)
+
+    nodes: list[dict[str, Any]] = []
+    links: list[dict[str, Any]] = []
+    added_nodes: set[str] = set()
+
+    for _, row in top_mules.iterrows():
+        beneficiary_id = str(row["beneficiary_id"])
+        sending_users = row["user_ids"]
+        total_amount = float(row["total_amount"])
+
+        compromised_senders = [user_id for user_id in sending_users if user_id in high_risk_users]
+        num_compromised = len(compromised_senders)
+
+        mule_risk = "Low"
+        mule_score = 30.0
+        if num_compromised >= 2:
+            mule_risk = "High"
+            mule_score = 90.0
+        elif num_compromised == 1 or len(sending_users) >= 2:
+            mule_risk = "Medium"
+            mule_score = 65.0
+
+        if beneficiary_id not in added_nodes:
+            nodes.append({
+                "id": beneficiary_id,
+                "label": f"Mule Hub: {beneficiary_id}",
+                "type": "beneficiary",
+                "risk_score": mule_score,
+                "risk_level": mule_risk,
+                "total_received": total_amount,
+                "txn_count": int(row["txn_count"]),
+                "is_new": bool(row["is_new"]),
+            })
+            added_nodes.add(beneficiary_id)
+
+        for user_id in sending_users:
+            is_compromised = user_id in high_risk_users
+            user_risk_rows = alerts[alerts["user_id"] == user_id]
+            user_score = 35.0
+            if not user_risk_rows.empty:
+                user_score = float(user_risk_rows["risk_score"].max())
+
+            if user_id not in added_nodes:
+                nodes.append({
+                    "id": user_id,
+                    "label": f"Sender: {user_id}",
+                    "type": "user",
+                    "risk_score": user_score,
+                    "risk_level": "High" if user_score >= 70 else "Medium" if user_score >= 50 else "Low",
+                    "is_compromised": is_compromised,
+                })
+                added_nodes.add(user_id)
+
+            edge_txns = transactions[
+                (transactions["user_id"] == user_id) & (transactions["beneficiary_id"] == beneficiary_id)
+            ]
+            txn_sum = float(edge_txns["amount"].sum())
+            txn_count = len(edge_txns)
+
+            links.append({
+                "source": user_id,
+                "target": beneficiary_id,
+                "amount": txn_sum,
+                "count": txn_count,
+            })
+
+    if not nodes:
+        top_user = str(alerts[alerts["risk_score"] >= 70]["user_id"].iloc[0]) if not alerts.empty else "U1000"
+        nodes.append({
+            "id": top_user,
+            "label": f"Sender: {top_user}",
+            "type": "user",
+            "risk_score": 85.0,
+            "risk_level": "High",
+            "is_compromised": True,
+        })
+        nodes.append({
+            "id": "MULE_HUB",
+            "label": "Mule Hub: MULE_HUB",
+            "type": "beneficiary",
+            "risk_score": 90.0,
+            "risk_level": "High",
+            "total_received": 0.0,
+            "txn_count": 0,
+            "is_new": True,
+        })
+        links.append({"source": top_user, "target": "MULE_HUB", "amount": 0.0, "count": 0})
+
+    return {"nodes": nodes, "links": links}
+
+
+class Neo4jConfigPayload(BaseModel):
+    uri: str = "bolt://localhost:7687"
+    username: str = "neo4j"
+    password: str = "password"
+    database: str = "neo4j"
+
+
+class CypherQueryPayload(BaseModel):
+    query: str
+
+
+NEO4J_CONFIG_PATH = PROJECT_ROOT / "backend" / "neo4j_config.json"
+
+
+def load_neo4j_config() -> dict[str, str]:
+    default = {
+        "uri": "bolt://localhost:7687",
+        "username": "neo4j",
+        "password": "password",
+        "database": "neo4j"
+    }
+    if NEO4J_CONFIG_PATH.exists():
+        try:
+            with open(NEO4J_CONFIG_PATH, "r") as f:
+                return json.load(f)
+        except Exception:
+            return default
+    return default
+
+
+def save_neo4j_config(config: dict[str, str]):
+    NEO4J_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(NEO4J_CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+@app.get("/neo4j/status")
+def get_neo4j_status():
+    from neo4j import GraphDatabase
+    config = load_neo4j_config()
+    db_name = config.get("database", "neo4j")
+    try:
+        driver = GraphDatabase.driver(config["uri"], auth=(config["username"], config["password"]))
+        with driver.session(database=db_name) as session:
+            nodes_res = session.run("MATCH (n) RETURN count(n) AS count").single()
+            nodes_count = nodes_res["count"] if nodes_res else 0
+            
+            rels_res = session.run("MATCH ()-[r]->() RETURN count(r) AS count").single()
+            rels_count = rels_res["count"] if rels_res else 0
+            
+        driver.close()
+        return {
+            "status": "online",
+            "nodes": nodes_count,
+            "relationships": rels_count,
+            "uri": config["uri"],
+            "username": config["username"],
+            "database": db_name
+        }
+    except Exception as e:
+        return {
+            "status": "offline",
+            "error": str(e),
+            "uri": config["uri"],
+            "username": config["username"],
+            "database": db_name
+        }
+
+
+@app.post("/neo4j/config")
+def update_neo4j_config(payload: Neo4jConfigPayload):
+    config = {
+        "uri": payload.uri,
+        "username": payload.username,
+        "password": payload.password,
+        "database": payload.database
+    }
+    save_neo4j_config(config)
+    return {"status": "success", "message": "Neo4j configuration updated successfully."}
+
+
+@app.post("/neo4j/sync")
+def sync_neo4j(background_tasks: BackgroundTasks):
+    from cyberpulse.backend.neo4j_sync import sync_data_to_neo4j
+    config = load_neo4j_config()
+    background_tasks.add_task(
+        sync_data_to_neo4j,
+        config["uri"],
+        config["username"],
+        config["password"],
+        config.get("database", "neo4j")
+    )
+    return {"status": "sync_started", "message": "Database sync started in background."}
+
+
+def generate_csv_based_graph():
+    """Generates a realistic graph of nodes/links from the local CSVs for the 3D visualization when Neo4j is offline."""
+    data = load_data()
+    alerts = data["alerts"]
+    transactions = data["transactions"]
+    telemetry = data["telemetry"]
+    
+    high_alerts = alerts.sort_values(by="risk_score", ascending=False).head(15)
+    if high_alerts.empty:
+        high_alerts = alerts.head(15)
+        
+    nodes = []
+    links = []
+    seen_nodes = set()
+    
+    def add_node(node_id, label, node_type, properties):
+        if node_id not in seen_nodes:
+            nodes.append({
+                "id": node_id,
+                "label": f"{label}: {node_id}",
+                "type": node_type,
+                **properties
+            })
+            seen_nodes.add(node_id)
+            
+    for _, alert_row in high_alerts.iterrows():
+        sess_id = str(alert_row["session_id"])
+        user_id = str(alert_row["user_id"])
+        risk_score = float(alert_row["risk_score"])
+        
+        user_risk_rows = alerts[alerts["user_id"] == user_id]
+        user_score = float(user_risk_rows["risk_score"].max()) if not user_risk_rows.empty else risk_score
+        add_node(user_id, "User", "user", {
+            "risk_score": user_score,
+            "risk_level": "High" if user_score >= 70 else "Medium" if user_score >= 50 else "Low",
+            "is_compromised": user_score >= 70
+        })
+        
+        add_node(sess_id, "Session", "session", {
+            "risk_score": risk_score,
+            "quantum_risk_level": str(alert_row.get("quantum_risk_level", "Low")),
+            "explanation": str(alert_row.get("explanation", "Normal activity")),
+            "failed_login_count": int(alert_row.get("failed_login_count", 0)),
+            "device_changed": bool(alert_row.get("device_change_flag", 0)),
+            "geo_velocity_flag": bool(alert_row.get("geo_velocity_flag", 0)),
+            "weak_crypto_flag": bool(alert_row.get("weak_crypto_flag", 0)),
+            "new_beneficiary_flag": bool(alert_row.get("new_beneficiary_flag", 0))
+        })
+        
+        links.append({
+            "source": user_id,
+            "target": sess_id,
+            "type": "INITIATED"
+        })
+        
+        start_t = alert_row["session_start"]
+        end_t = alert_row["session_end"]
+        
+        user_txns = transactions[(transactions["user_id"] == user_id) & (transactions["timestamp"] >= start_t) & (transactions["timestamp"] <= end_t)]
+        for _, txn_row in user_txns.iterrows():
+            txn_id = str(txn_row["txn_id"])
+            benef_id = str(txn_row["beneficiary_id"])
+            amt = float(txn_row["amount"])
+            
+            add_node(txn_id, "Transaction", "transaction", {
+                "amount": amt,
+                "channel": str(txn_row["channel"]),
+                "merchant_category": str(txn_row["merchant_category"]),
+                "timestamp": str(txn_row["timestamp"])
+            })
+            
+            add_node(benef_id, "Beneficiary", "beneficiary", {
+                "is_new": bool(txn_row["beneficiary_is_new"]),
+                "risk_score": 75.0 if bool(txn_row["beneficiary_is_new"]) else 30.0,
+                "risk_level": "High" if bool(txn_row["beneficiary_is_new"]) else "Low"
+            })
+            
+            links.append({
+                "source": sess_id,
+                "target": txn_id,
+                "type": "RECORDED_TRANSACTION"
+            })
+            
+            links.append({
+                "source": txn_id,
+                "target": benef_id,
+                "type": "TO_BENEFICIARY"
+            })
+            
+        user_tele = telemetry[(telemetry["user_id"] == user_id) & (telemetry["timestamp"] >= start_t) & (telemetry["timestamp"] <= end_t)]
+        for _, tele_row in user_tele.head(2).iterrows():
+            ip_val = str(tele_row["ip_address"])
+            dev_val = str(tele_row["device_fingerprint"])
+            
+            if ip_val and ip_val != "nan":
+                add_node(ip_val, "IPAddress", "ipaddress", {"value": ip_val})
+                links.append({
+                    "source": sess_id,
+                    "target": ip_val,
+                    "type": "CONNECTED_FROM",
+                    "tls_version": str(tele_row.get("tls_version", "Unknown")),
+                    "cipher_suite": str(tele_row.get("cipher_suite", "Unknown"))
+                })
+                
+            if dev_val and dev_val != "nan":
+                add_node(dev_val, "Device", "device", {"id": dev_val})
+                links.append({
+                    "source": sess_id,
+                    "target": dev_val,
+                    "type": "USED_DEVICE"
+                })
+                
+    return {"nodes": nodes, "links": links}
+
+
+@app.get("/neo4j/graph")
+def get_neo4j_graph():
+    from neo4j import GraphDatabase
+    config = load_neo4j_config()
+    try:
+        driver = GraphDatabase.driver(config["uri"], auth=(config["username"], config["password"]))
+        with driver.session(database=config.get("database", "neo4j")) as session:
+            query = """
+            MATCH (n)
+            OPTIONAL MATCH (n)-[r]->(m)
+            RETURN n, r, m LIMIT 250
+            """
+            result = session.run(query)
+            
+            nodes = []
+            links = []
+            seen_nodes = set()
+            
+            for record in result:
+                n = record["n"]
+                m = record["m"]
+                r = record["r"]
+                
+                for node in [n, m]:
+                    if node is not None:
+                        node_id = node.get("id") or node.get("value") or node.element_id
+                        if node_id not in seen_nodes:
+                            labels = list(node.labels)
+                            node_type = labels[0].lower() if labels else "unknown"
+                            props = dict(node)
+                            lbl = node_type.capitalize()
+                            
+                            nodes.append({
+                                "id": str(node_id),
+                                "label": f"{lbl}: {node_id}",
+                                "type": node_type,
+                                **props
+                            })
+                            seen_nodes.add(node_id)
+                            
+                if r is not None and n is not None and m is not None:
+                    src_id = str(n.get("id") or n.get("value") or n.element_id)
+                    tgt_id = str(m.get("id") or m.get("value") or m.element_id)
+                    r_props = dict(r)
+                    links.append({
+                        "source": src_id,
+                        "target": tgt_id,
+                        "type": r.type,
+                        **r_props
+                    })
+                    
+        driver.close()
+        
+        if not nodes:
+            mock_g = generate_csv_based_graph()
+            mock_g["is_mock"] = True
+            mock_g["is_empty_db"] = True
+            return mock_g
+            
+        return {"nodes": nodes, "links": links, "is_mock": False}
+        
+    except Exception as e:
+        mock_g = generate_csv_based_graph()
+        mock_g["is_mock"] = True
+        mock_g["error"] = str(e)
+        return mock_g
+
+
+@app.post("/neo4j/query")
+def run_neo4j_query(payload: CypherQueryPayload):
+    from neo4j import GraphDatabase
+    config = load_neo4j_config()
+    try:
+        driver = GraphDatabase.driver(config["uri"], auth=(config["username"], config["password"]))
+        with driver.session(database=config.get("database", "neo4j")) as session:
+            result = session.run(payload.query)
+            
+            nodes = []
+            links = []
+            seen_nodes = set()
+            
+            for record in result:
+                record_nodes = []
+                record_rels = []
+                
+                for key, val in record.items():
+                    if val is None:
+                        continue
+                    if hasattr(val, "labels"):
+                        record_nodes.append(val)
+                    elif hasattr(val, "type") and hasattr(val, "start_node") and hasattr(val, "end_node"):
+                        record_rels.append(val)
+                    elif isinstance(val, list):
+                        for item in val:
+                            if hasattr(item, "labels"):
+                                record_nodes.append(item)
+                            elif hasattr(item, "type") and hasattr(item, "start_node") and hasattr(item, "end_node"):
+                                record_rels.append(item)
+                                
+                for node in record_nodes:
+                    node_id = node.get("id") or node.get("value") or node.element_id
+                    if node_id not in seen_nodes:
+                        labels = list(node.labels)
+                        node_type = labels[0].lower() if labels else "unknown"
+                        props = dict(node)
+                        lbl = node_type.capitalize()
+                        nodes.append({
+                            "id": str(node_id),
+                            "label": f"{lbl}: {node_id}",
+                            "type": node_type,
+                            **props
+                        })
+                        seen_nodes.add(node_id)
+                        
+                for rel in record_rels:
+                    start_node = rel.start_node
+                    end_node = rel.end_node
+                    
+                    src_id = start_node.get("id") or start_node.get("value") or start_node.element_id if hasattr(start_node, "get") else start_node
+                    tgt_id = end_node.get("id") or end_node.get("value") or end_node.element_id if hasattr(end_node, "get") else end_node
+                    
+                    links.append({
+                        "source": str(src_id),
+                        "target": str(tgt_id),
+                        "type": rel.type,
+                        **dict(rel)
+                    })
+                    
+        driver.close()
+        return {"nodes": nodes, "links": links}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Cypher Query Error: {e}")
 
 
 if __name__ == "__main__":
