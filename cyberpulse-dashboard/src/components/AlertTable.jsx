@@ -12,34 +12,56 @@ function formatTimestamp(value) {
   });
 }
 
-function riskTone(score) {
-  if (score >= 85) return "bg-riskHigh text-riskHigh";
-  if (score >= 50) return "bg-riskMedium text-riskMedium";
-  return "bg-riskLow text-riskLow";
+function riskToneColor(score) {
+  if (score >= 85) return "bg-riskHigh shadow-[0_0_6px_#ef4444]";
+  if (score >= 50) return "bg-riskMedium shadow-[0_0_6px_#f59e0b]";
+  return "bg-riskLow shadow-[0_0_6px_#10b981]";
 }
 
 function quantumClass(level) {
-  if (level === "High") return "border-riskHigh/60 text-riskHigh";
-  if (level === "Medium") return "border-riskMedium/70 text-riskMedium";
-  return "border-riskLow/60 text-riskLow";
+  if (level === "High") return "border-riskHigh/25 text-riskHigh bg-riskHigh/5";
+  if (level === "Medium") return "border-riskMedium/25 text-riskMedium bg-riskMedium/5";
+  return "border-riskLow/25 text-riskLow bg-riskLow/5";
+}
+
+function triageBadgeClass(status = "new") {
+  const base = "inline-flex items-center text-[0.6rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded border w-fit ";
+  if (status === "resolved") return base + "text-riskLow border-riskLow/20 bg-riskLow/5";
+  if (status === "escalated") return base + "text-riskHigh border-riskHigh/20 bg-riskHigh/5";
+  if (status === "investigating") return base + "text-riskMedium border-riskMedium/20 bg-riskMedium/5";
+  return base + "text-cyberBlue border-cyberBlue/20 bg-cyberBlue/5";
 }
 
 function ExplanationCell({ alert, expanded, onToggle }) {
   return (
     <button
       type="button"
-      className="block w-full text-left text-sm leading-5 text-text/90 focus-visible:outline-2 focus-visible:outline-amber"
+      className="block w-full text-left text-xs leading-relaxed text-text/80 focus-visible:outline-2 focus-visible:outline-amber bg-white/1 border border-white/2 hover:border-white/5 p-2 rounded transition-all duration-200"
       onClick={(event) => {
         event.stopPropagation();
         onToggle(alert.session_id);
       }}
       aria-expanded={expanded}
     >
-      <span className={expanded ? "" : "line-clamp-2"}>
+      <span className={expanded ? "block text-text/90" : "line-clamp-2"}>
         {alert.explanation || "No explanation returned by backend."}
       </span>
-      <span className="mt-1 block text-[0.68rem] uppercase tracking-[0.14em] text-muted">
-        {expanded ? "Collapse explanation" : "Expand explanation"}
+      <span className="mt-1.5 flex items-center gap-1 text-[0.62rem] font-extrabold uppercase tracking-[0.12em] text-muted hover:text-amber transition-colors">
+        {expanded ? (
+          <>
+            <span>Collapse Details</span>
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            </svg>
+          </>
+        ) : (
+          <>
+            <span>Expand Details</span>
+            <svg className="w-3 h-3 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </>
+        )}
       </span>
     </button>
   );
@@ -80,93 +102,105 @@ export default function AlertTable({ alerts, loading, error, onSelect, onTriageC
   }
 
   if (loading) {
-    return <div className="soc-panel h-[420px] animate-pulse bg-panelSoft" />;
+    return <div className="soc-panel h-[420px] animate-pulse bg-panelSoft/50" />;
   }
 
   if (error) {
     return (
-      <div className="soc-panel border-riskHigh/50 px-4 py-5 text-riskHigh">
-        Alert feed is offline. Confirm the backend is running at http://127.0.0.1:8000 and reload.
+      <div className="soc-panel border-riskHigh/30 bg-riskHigh/5 px-5 py-6 text-riskHigh/90 backdrop-blur-md rounded-md flex items-center gap-3">
+        <svg className="w-6 h-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>Alert feed is offline. Confirm the backend is running at http://127.0.0.1:8000 and reload.</span>
       </div>
     );
   }
 
   return (
     <section className="soc-panel overflow-hidden" aria-label="Alert feed">
-      <div className="flex flex-col gap-3 border-b border-border px-4 py-3 xl:flex-row xl:items-end xl:justify-between">
+      <div className="flex flex-col gap-4 border-b border-white/5 bg-[#0e131b]/60 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <div className="soc-label">Alert feed</div>
-          <div className="mt-1 font-mono text-sm text-muted">
-            Showing {processed.length.toLocaleString()} of {alerts.length.toLocaleString()} fetched sessions
+          <div className="mt-1 font-mono text-[0.7rem] text-muted">
+            Correlating <span className="text-text font-bold">{processed.length.toLocaleString()}</span> of {alerts.length.toLocaleString()} threat vectors
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-xs text-muted">
-            Quantum risk
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted/90">Quantum risk</span>
             <select
               value={quantumFilter}
               onChange={(event) => setQuantumFilter(event.target.value)}
-              className="mt-1 w-full border border-border bg-base px-2 py-2 font-mono text-sm text-text"
+              className="cyber-input py-1.5 text-xs rounded"
             >
-              <option>All</option>
-              <option>High</option>
-              <option>Medium</option>
-              <option>Low</option>
+              <option value="All">All Levels</option>
+              <option value="High">High Risk</option>
+              <option value="Medium">Medium Risk</option>
+              <option value="Low">Low Risk</option>
             </select>
-          </label>
+          </div>
 
-          <label className="text-xs text-muted">
-            Start date
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted/90">Start date</span>
             <input
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="mt-1 w-full border border-border bg-base px-2 py-2 font-mono text-sm text-text"
+              className="cyber-input py-1.5 text-xs rounded"
             />
-          </label>
+          </div>
 
-          <label className="text-xs text-muted">
-            End date
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted/90">End date</span>
             <input
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="mt-1 w-full border border-border bg-base px-2 py-2 font-mono text-sm text-text"
+              className="cyber-input py-1.5 text-xs rounded"
             />
-          </label>
+          </div>
 
           <button
             type="button"
-            className="soc-button self-end"
+            className="soc-button py-2 px-3 text-xs w-full flex items-center justify-center gap-1.5 rounded"
             onClick={() => setSortDir((current) => (current === "desc" ? "asc" : "desc"))}
           >
-            Risk {sortDir === "desc" ? "highest first" : "lowest first"}
+            <span>Risk Score</span>
+            <svg 
+              className={`w-3.5 h-3.5 text-amber transition-transform duration-300 ${sortDir === "asc" ? "rotate-180" : ""}`} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor" 
+              strokeWidth="2.5"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 13l-7 7-7-7m14-6l-7-7-7 7" />
+            </svg>
           </button>
         </div>
       </div>
 
       {processed.length === 0 ? (
-        <div className="px-4 py-10 text-sm text-muted">
+        <div className="px-5 py-16 text-center text-xs text-muted/80">
           No sessions match this filter set. Widen the date range or include more quantum-risk levels.
         </div>
       ) : (
         <div className="max-h-[620px] overflow-auto">
           <table className="w-full min-w-[980px] border-collapse text-left">
-            <thead className="sticky top-0 z-10 border-b border-border bg-panel">
-              <tr className="text-[0.68rem] uppercase tracking-[0.14em] text-muted">
-                <th className="px-4 py-3 font-semibold">User ID</th>
-                <th className="px-4 py-3 font-semibold">Timestamp</th>
-                <th className="px-4 py-3 font-semibold">Risk score</th>
-                <th className="px-4 py-3 font-semibold">Explanation</th>
-                <th className="px-4 py-3 font-semibold">Quantum risk</th>
-                <th className="px-4 py-3 font-semibold">Triage</th>
+            <thead className="sticky top-0 z-10 border-b border-white/5 bg-[#0e131b]">
+              <tr className="text-[0.65rem] font-extrabold uppercase tracking-[0.16em] text-muted border-b border-white/5">
+                <th className="px-5 py-3.5 font-bold">User ID</th>
+                <th className="px-5 py-3.5 font-bold">Timestamp</th>
+                <th className="px-5 py-3.5 font-bold">Risk score</th>
+                <th className="px-5 py-3.5 font-bold">Explanation</th>
+                <th className="px-5 py-3.5 font-bold">Quantum risk</th>
+                <th className="px-5 py-3.5 font-bold">Triage Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-white/3 bg-base/10">
               {processed.map((alert) => {
-                const tone = riskTone(Number(alert.risk_score || 0));
-                const riskColor = tone.split(" ")[0];
+                const score = Number(alert.risk_score || 0);
+                const colorTone = riskToneColor(score);
                 const expandedRow = expanded.has(alert.session_id);
                 return (
                   <tr
@@ -176,52 +210,50 @@ export default function AlertTable({ alerts, loading, error, onSelect, onTriageC
                     onKeyDown={(event) => {
                       if (event.key === "Enter") onSelect(alert);
                     }}
-                    className="cursor-pointer border-b border-border transition-colors hover:bg-panelSoft focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber"
+                    className="cursor-pointer transition-colors duration-200 hover:bg-white/[0.015] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber"
                   >
-                    <td className="px-4 py-3 align-top">
+                    <td className="px-5 py-4 align-top">
                       <div className="soc-mono text-sm font-semibold text-text">{alert.user_id}</div>
-                      <div className="soc-mono mt-1 text-[0.68rem] text-muted">{alert.session_id}</div>
+                      <div className="soc-mono mt-1 text-[0.65rem] text-muted font-bold">{alert.session_id}</div>
                     </td>
-                    <td className="soc-mono px-4 py-3 align-top text-sm text-muted">
+                    <td className="soc-mono px-5 py-4 align-top text-xs text-muted/90">
                       {formatTimestamp(alert.timestamp || alert.session_start)}
                     </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="soc-mono text-sm font-bold text-text">
-                        {Number(alert.risk_score || 0).toFixed(1)}
+                    <td className="px-5 py-4 align-top">
+                      <div className="soc-mono text-sm font-extrabold text-text">
+                        {score.toFixed(1)}
                       </div>
-                      <div className="mt-2 h-1.5 w-28 bg-steel">
+                      <div className="mt-2 h-1.5 w-28 bg-steel rounded-full overflow-hidden">
                         <div
-                          className={`h-full ${riskColor}`}
-                          style={{ width: `${Math.min(100, Number(alert.risk_score || 0))}%` }}
+                          className={`h-full rounded-full ${colorTone}`}
+                          style={{ width: `${Math.min(100, score)}%` }}
                         />
                       </div>
                     </td>
-                    <td className="max-w-[520px] px-4 py-3 align-top">
+                    <td className="max-w-[480px] px-5 py-4 align-top">
                       <ExplanationCell
                         alert={alert}
                         expanded={expandedRow}
                         onToggle={toggleExpanded}
                       />
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="px-5 py-4 align-top">
                       <span
-                        className={`inline-flex border px-2 py-1 font-mono text-xs font-semibold uppercase tracking-[0.1em] ${quantumClass(
+                        className={`inline-flex border px-2 py-0.5 rounded font-mono text-[0.65rem] font-bold uppercase tracking-[0.08em] ${quantumClass(
                           alert.quantum_risk_level,
                         )}`}
                       >
                         {alert.quantum_risk_level || "Unknown"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="px-5 py-4 align-top">
                       <div className="flex flex-col gap-2">
-                        <span className="text-[0.68rem] uppercase tracking-[0.14em] text-muted">
-                          {alert.triage_status || "new"}
-                        </span>
+                        {triageBadgeClass(alert.triage_status)}
                         <select
                           value={alert.triage_status || "new"}
                           onClick={(event) => event.stopPropagation()}
                           onChange={(event) => onTriageChange?.(alert.session_id, event.target.value, alert.triage_note || "")}
-                          className="border border-border bg-base px-2 py-2 font-mono text-sm text-text"
+                          className="border border-white/5 bg-[#0a0e14] rounded px-2 py-1 font-mono text-[0.7rem] text-text/80 transition-all focus:border-amber/40 focus:outline-none"
                         >
                           <option value="new">New</option>
                           <option value="investigating">Investigating</option>

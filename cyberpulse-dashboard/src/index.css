@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: dark;
-  background: #0b0f13;
+  background: #070a0e;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,75 +19,129 @@ body,
 
 body {
   margin: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 180px),
-    #0b0f13;
-  color: #e6edf3;
-  font-family: Inter, "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  background-color: #070a0e;
+  background-image: 
+    radial-gradient(rgba(255, 255, 255, 0.015) 1.2px, transparent 1.2px), 
+    radial-gradient(rgba(255, 255, 255, 0.008) 1.2px, transparent 1.2px);
+  background-size: 32px 32px;
+  background-position: 0 0, 16px 16px;
+  color: #eef2f6;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-select:focus-visible {
-  outline: 2px solid #e8a33d;
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #ffaa22;
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(232, 163, 61, 0.35);
+  background: rgba(255, 170, 34, 0.25);
+  color: #ffffff;
 }
 
+/* Customized thin cyber scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2b3642;
-  border: 2px solid #0b0f13;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 170, 34, 0.4);
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b0f13;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 @layer components {
+  /* Premium Glassmorphic Panel */
   .soc-panel {
-    @apply border border-border bg-panel;
-    border-radius: 4px;
+    @apply bg-panel/75 backdrop-blur-md border border-white/5 shadow-2xl transition-all duration-300;
+    border-radius: 6px;
+  }
+
+  .soc-panel:hover {
+    @apply border-white/10;
+    box-shadow: 0 10px 30px -15px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Interactive Hover Elevate Panel */
+  .soc-panel-interactive {
+    @apply soc-panel cursor-pointer;
+  }
+  
+  .soc-panel-interactive:hover {
+    @apply border-amber/20 -translate-y-1;
+    box-shadow: 0 20px 40px -20px rgba(255, 170, 34, 0.08), 0 0 20px rgba(255, 170, 34, 0.02);
   }
 
   .soc-label {
-    @apply text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted;
+    @apply font-display text-[0.68rem] font-bold uppercase tracking-[0.2em] text-muted/90;
   }
 
   .soc-mono {
-    @apply font-mono tracking-normal;
+    @apply font-mono tracking-tight;
   }
 
+  /* High Tech Cyber Buttons */
   .soc-button {
-    @apply border border-borderStrong bg-panelSoft px-3 py-2 text-sm font-semibold text-text transition-colors;
-    border-radius: 3px;
+    @apply border border-white/10 bg-[#121820]/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text transition-all duration-200;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   }
 
-  .soc-button:hover {
-    @apply border-amber text-amber;
+  .soc-button:hover:not(:disabled) {
+    @apply border-amber/60 text-amber bg-[#151c27];
+    box-shadow: 0 0 12px rgba(255, 170, 34, 0.15);
+  }
+
+  .soc-button:active:not(:disabled) {
+    @apply scale-95;
   }
 
   .soc-button-primary {
-    @apply border-amber bg-amber px-3 py-2 text-sm font-bold transition-opacity;
-    border-radius: 3px;
-    color: #0b0f13;
+    @apply bg-amber px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider transition-all duration-200 border border-amber/80;
+    border-radius: 4px;
+    color: #070a0e;
+    box-shadow: 0 4px 14px rgba(255, 170, 34, 0.25);
   }
 
-  .soc-button-primary:hover {
-    opacity: 0.9;
+  .soc-button-primary:hover:not(:disabled) {
+    @apply bg-amber/90 -translate-y-[1px];
+    box-shadow: 0 6px 20px rgba(255, 170, 34, 0.35);
   }
+
+  .soc-button-primary:active:not(:disabled) {
+    @apply scale-95 translate-y-0;
+  }
+
+  /* Custom input components */
+  .cyber-input {
+    @apply border border-white/5 bg-[#0a0e14] px-3 py-2 text-sm text-text font-mono transition-all duration-200 focus:border-amber/50 focus:outline-none focus:bg-[#0d131a];
+    border-radius: 4px;
+  }
+}
+
+/* Typography styles override */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Outfit", sans-serif;
+  letter-spacing: -0.01em;
 }

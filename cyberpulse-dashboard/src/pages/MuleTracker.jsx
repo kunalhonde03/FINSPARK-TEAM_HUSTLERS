@@ -125,13 +125,16 @@ export default function MuleTracker() {
   }, [hoveredNode, data.links]);
 
   if (loading) {
-    return <div className="soc-panel h-[480px] animate-pulse bg-panelSoft" />;
+    return <div className="soc-panel h-[480px] animate-pulse bg-panelSoft/50" />;
   }
 
   if (error) {
     return (
-      <div className="soc-panel border-riskHigh/50 px-4 py-5 text-riskHigh">
-        Mule tracker network offline. Verify backend is online.
+      <div className="soc-panel border-riskHigh/30 bg-riskHigh/5 px-5 py-6 text-riskHigh/90 backdrop-blur-md rounded-md flex items-center gap-3">
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>Mule tracker network offline. Verify backend is online.</span>
       </div>
     );
   }
@@ -151,28 +154,40 @@ export default function MuleTracker() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         {/* Network Canvas Panel */}
-        <div className="soc-panel relative overflow-hidden bg-[#0d0f12] p-4">
-          <div className="absolute left-4 top-4 z-10 flex gap-4 text-xs font-mono">
-            <span className="flex items-center gap-1.5 text-[#5e9eff]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#5e9eff]" /> Sender Account
+        <div className="soc-panel relative overflow-hidden bg-[#06090e] p-5 border border-white/5">
+          <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-4 text-[10px] font-mono bg-[#070a0e]/75 backdrop-blur px-3 py-2 rounded border border-white/5">
+            <span className="flex items-center gap-1.5 text-cyberBlue">
+              <span className="h-2 w-2 rounded-full bg-cyberBlue" /> Sender Account
             </span>
             <span className="flex items-center gap-1.5 text-riskHigh">
-              <span className="h-2.5 w-2.5 rounded-full bg-riskHigh" /> Compromised Sender
+              <span className="h-2 w-2 rounded-full bg-riskHigh animate-ping" /> Compromised Sender
             </span>
             <span className="flex items-center gap-1.5 text-amber">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber" /> Mule Hub (Beneficiary)
+              <span className="h-2 w-2 rounded-full bg-amber" /> Mule Hub (Beneficiary)
             </span>
           </div>
 
           <svg viewBox="0 0 960 580" className="h-auto w-full">
             <defs>
-              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+                <feGaussianBlur stdDeviation="5.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
               </filter>
             </defs>
+
+            {/* Tactical Radar Background Matrix */}
+            <g opacity="0.12">
+              <circle cx="480" cy="290" r="100" fill="none" stroke="#00e5ff" strokeWidth="0.8" strokeDasharray="3, 3" />
+              <circle cx="480" cy="290" r="200" fill="none" stroke="#00e5ff" strokeWidth="0.8" strokeDasharray="4, 4" />
+              <circle cx="480" cy="290" r="300" fill="none" stroke="#00e5ff" strokeWidth="0.8" />
+              <line x1="80" y1="290" x2="880" y2="290" stroke="#00e5ff" strokeWidth="0.8" strokeDasharray="5, 5" />
+              <line x1="480" y1="50" x2="480" y2="530" stroke="#00e5ff" strokeWidth="0.8" strokeDasharray="5, 5" />
+            </g>
 
             {/* Links/Edges */}
             <g>
@@ -187,19 +202,19 @@ export default function MuleTracker() {
                       y1={link.sourceNode.y}
                       x2={link.targetNode.x}
                       y2={link.targetNode.y}
-                      stroke={isHighlighted ? "#ffb020" : "#1a222d"}
-                      strokeWidth={isHighlighted ? 2.5 : 1}
+                      stroke={isHighlighted ? "#ffaa22" : "rgba(255,255,255,0.03)"}
+                      strokeWidth={isHighlighted ? 2.5 : 0.8}
                       strokeDasharray={link.sourceNode.is_compromised && isHighlighted ? "5, 5" : "none"}
                       className={isHighlighted && link.sourceNode.is_compromised ? "animate-pulse" : ""}
                     />
                     {isHighlighted && (
                       <circle
                         r="3.5"
-                        fill="#ffb020"
-                        className="animate-[pulse_1.5s_infinite]"
+                        fill="#ffaa22"
+                        className="animate-pulse"
                       >
                         <animateMotion
-                          dur="3s"
+                          dur="3.2s"
                           repeatCount="indefinite"
                           path={`M ${link.sourceNode.x} ${link.sourceNode.y} L ${link.targetNode.x} ${link.targetNode.y}`}
                         />
@@ -216,23 +231,23 @@ export default function MuleTracker() {
                 const isHovered = hoveredNode?.id === node.id;
                 const isDimmed = hoveredNode && !connectedNodeIds.has(node.id);
                 
-                let fillColor = "#5e9eff"; // User default
+                let fillColor = "#00e5ff"; // User default (cyberBlue)
                 if (node.type === "user") {
-                  if (node.is_compromised) fillColor = "#ff4a4a"; // Compromised user
+                  if (node.is_compromised) fillColor = "#ef4444"; // Compromised user
                 } else {
-                  fillColor = "#ffb020"; // Mule beneficiary
+                  fillColor = "#ffaa22"; // Mule beneficiary
                 }
 
                 return (
                   <g
                     key={node.id}
                     className="cursor-pointer transition-all duration-200"
-                    style={{ opacity: isDimmed ? 0.25 : 1 }}
+                    style={{ opacity: isDimmed ? 0.2 : 1 }}
                     onMouseEnter={() => setHoveredNode(node)}
                     onMouseLeave={() => setHoveredNode(null)}
                     onClick={() => setSelectedNode(node)}
                   >
-                    {/* Ring glow for selected or hovered */}
+                    {/* Glowing highlight indicator */}
                     {(isHovered || selectedNode?.id === node.id) && (
                       <circle
                         cx={node.x}
@@ -242,6 +257,7 @@ export default function MuleTracker() {
                         stroke={fillColor}
                         strokeWidth="2"
                         filter="url(#glow)"
+                        className="animate-[pulse_1.8s_infinite]"
                       />
                     )}
 
@@ -250,16 +266,16 @@ export default function MuleTracker() {
                       cy={node.y}
                       r={node.type === "beneficiary" ? 14 : 9}
                       fill={fillColor}
-                      stroke="#0d0f12"
-                      strokeWidth="2"
+                      stroke="#06090e"
+                      strokeWidth="2.5"
                     />
 
                     <text
                       x={node.x}
-                      y={node.type === "beneficiary" ? node.y + 26 : node.y - 15}
+                      y={node.type === "beneficiary" ? node.y + 28 : node.y - 15}
                       textAnchor="middle"
                       fill="#e2e8f0"
-                      className="font-mono text-[10px] font-bold"
+                      className="font-mono text-[9px] font-extrabold select-none pointer-events-none text-glow"
                     >
                       {node.id}
                     </text>
@@ -271,79 +287,91 @@ export default function MuleTracker() {
         </div>
 
         {/* Tooltip Details Panel */}
-        <div className="soc-panel flex flex-col justify-between bg-panel p-5">
+        <div className="soc-panel flex flex-col justify-between p-5.5 bg-[#0e131b]/90 backdrop-blur border border-white/5">
           {activeNodeInfo ? (
-            <div className="space-y-4">
-              <div>
+            <div className="space-y-5">
+              <div className="border-b border-white/5 pb-4">
                 <span className="soc-label">
                   {activeNodeInfo.type === "beneficiary" ? "Mule Hub Account" : "Compromised User"}
                 </span>
-                <h3 className="soc-mono mt-1 text-xl font-bold text-text">
+                <h3 className="soc-mono mt-1 text-lg font-black text-text">
                   {activeNodeInfo.id}
                 </h3>
               </div>
 
-              <div className="border-t border-border pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="border border-border bg-base px-3 py-2.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted">Risk Score</span>
-                    <div className="soc-mono text-lg font-bold text-amber">
-                      {activeNodeInfo.risk_score?.toFixed(1)}/100
-                    </div>
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="border border-white/5 bg-[#070a0e]/60 px-3.5 py-3 rounded">
+                  <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Risk Score</span>
+                  <div className="soc-mono text-base font-black text-amber mt-1">
+                    {activeNodeInfo.risk_score?.toFixed(1)}/100
                   </div>
-                  <div className="border border-border bg-base px-3 py-2.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted">Risk Tier</span>
-                    <div className="soc-mono text-lg font-bold text-text">
-                      {activeNodeInfo.risk_level}
-                    </div>
+                  <div className="mt-2 h-1.5 w-full bg-steel rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${
+                        activeNodeInfo.risk_score >= 80 ? "bg-riskHigh" : activeNodeInfo.risk_score >= 50 ? "bg-riskMedium" : "bg-riskLow"
+                      }`}
+                      style={{ width: `${activeNodeInfo.risk_score}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="border border-white/5 bg-[#070a0e]/60 px-3.5 py-3 rounded flex flex-col justify-between">
+                  <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Risk Tier</span>
+                  <div className="soc-mono text-sm font-extrabold text-text mt-2 uppercase tracking-wide">
+                    {activeNodeInfo.risk_level}
                   </div>
                 </div>
               </div>
 
               {activeNodeInfo.type === "beneficiary" ? (
-                <div className="space-y-3">
-                  <div className="border border-border bg-base px-3 py-2.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted">Total Cash Received</span>
-                    <div className="soc-mono text-base font-bold text-[#10b981]">
-                      INR {activeNodeInfo.total_received?.toLocaleString()}
+                <div className="space-y-3 pt-2">
+                  <div className="border border-white/5 bg-[#070a0e]/60 px-3.5 py-3 rounded">
+                    <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Total Cash Inflow</span>
+                    <div className="soc-mono text-base font-black text-riskLow mt-1">
+                      ₹ {activeNodeInfo.total_received?.toLocaleString()}
                     </div>
                   </div>
 
-                  <div className="border border-border bg-base px-3 py-2.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted">Transaction Count</span>
-                    <div className="soc-mono text-base font-bold text-text">
-                      {activeNodeInfo.txn_count} incoming wires
+                  <div className="border border-white/5 bg-[#070a0e]/60 px-3.5 py-3 rounded">
+                    <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Transaction Ingests</span>
+                    <div className="soc-mono text-xs font-bold text-text mt-1">
+                      {activeNodeInfo.txn_count} wires mapped
                     </div>
                   </div>
 
-                  <div className="border border-border bg-base px-3 py-2.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted">Account Status</span>
-                    <div className="soc-mono text-xs font-bold text-text">
-                      {activeNodeInfo.is_new ? "🔴 NEW REGISTRATION (HIGH RISK)" : "🟢 ESTABLISHED WALLET"}
+                  <div className="border border-white/5 bg-[#070a0e]/60 px-3.5 py-3 rounded">
+                    <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Wallet Register Status</span>
+                    <div className="soc-mono text-[10px] font-extrabold text-text mt-1">
+                      {activeNodeInfo.is_new ? (
+                        <span className="text-riskHigh">🔴 NEW REGISTRATION</span>
+                      ) : (
+                        <span className="text-riskLow">🟢 LEGACY RETAIL ACCOUNT</span>
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div className="border border-border bg-base px-3 py-2.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted">Client Classification</span>
-                    <div className="soc-mono text-xs font-bold text-text">
-                      {activeNodeInfo.is_compromised 
-                        ? "🔴 COMPROMISED (CREDENTIAL HIJACKING INDICATOR)" 
-                        : "🟢 UNCOMPROMISED SENDER"}
+                <div className="space-y-3 pt-2">
+                  <div className="border border-white/5 bg-[#070a0e]/60 px-3.5 py-3 rounded">
+                    <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Client Verification</span>
+                    <div className="soc-mono text-[10px] font-extrabold text-text mt-1">
+                      {activeNodeInfo.is_compromised ? (
+                        <span className="text-riskHigh">⚠️ HIJACK INDICATOR</span>
+                      ) : (
+                        <span className="text-riskLow">🛡️ ACCOUNT VALIDATED</span>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center text-sm text-muted">
+            <div className="text-center text-xs text-muted/75 py-12">
               Select or hover over a network node to inspect its fraud profile.
             </div>
           )}
 
-          <div className="border-t border-border pt-4 text-[11px] text-muted">
-            🔴 High-risk nodes are linked by dotted orange trace patterns showing real-time fund flows.
+          <div className="border-t border-white/5 pt-4 text-[10px] text-muted/80 leading-relaxed font-mono mt-5">
+            💡 Compromised nodes are flagged with dashed orange pulse flow links tracing wire endpoints.
           </div>
         </div>
       </div>

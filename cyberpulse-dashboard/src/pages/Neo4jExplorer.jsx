@@ -514,7 +514,7 @@ export default function Neo4jExplorer() {
         )}
 
         {/* OVERLAY 1: Top Center Filter Pill Bar (Frosted Glass) */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 flex gap-2 bg-[#141a21]/80 backdrop-blur-md border border-borderStrong p-1.5 rounded shadow-lg">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 flex gap-2 bg-[#0e131b]/80 backdrop-blur-md border border-white/5 p-1.5 rounded shadow-lg">
           {Object.keys(visibleTypes).map((type) => {
             const labelMap = {
               user: "Users",
@@ -531,10 +531,10 @@ export default function Neo4jExplorer() {
                 onClick={() => {
                   setVisibleTypes({ ...visibleTypes, [type]: !active });
                 }}
-                className={`px-3 py-1 font-mono text-[10px] font-bold uppercase transition-colors rounded ${
+                className={`px-3 py-1.5 font-mono text-[9px] font-bold uppercase transition-all rounded ${
                   active
-                    ? "bg-amber text-[#0b0f13]"
-                    : "text-muted hover:text-text hover:bg-panelSoft/50"
+                    ? "bg-amber text-[#070a0e] shadow-glow font-black"
+                    : "text-muted hover:text-text hover:bg-white/5"
                 }`}
               >
                 {labelMap[type]}
@@ -545,25 +545,25 @@ export default function Neo4jExplorer() {
 
         {/* OVERLAY 2: Top Right Search Bar */}
         <div className="absolute top-4 right-4 z-10 w-[260px]">
-          <form onSubmit={handleSearchSubmit} className="flex bg-[#141a21]/90 backdrop-blur border border-borderStrong rounded shadow-lg overflow-hidden">
+          <form onSubmit={handleSearchSubmit} className="flex bg-[#0e131b]/90 backdrop-blur border border-white/5 rounded shadow-lg overflow-hidden focus-within:border-amber/40 transition-colors">
             <input
               type="text"
-              placeholder="Search User / Session ID..."
+              placeholder="Search User / Session..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent px-3 py-1.5 text-xs text-text focus:outline-none placeholder:text-muted/40 font-mono"
+              className="flex-1 bg-transparent px-3 py-1.5 text-xs text-text focus:outline-none placeholder:text-muted/30 font-mono"
             />
-            <button type="submit" className="px-3 border-l border-borderStrong text-xs text-muted hover:text-amber font-mono">
+            <button type="submit" className="px-3 border-l border-white/5 text-xs font-bold text-muted hover:text-amber font-mono transition-colors">
               Find
             </button>
           </form>
         </div>
 
         {/* OVERLAY 3: Floating Left Physics & Controller Panel */}
-        <div className="absolute top-4 left-4 z-10 w-[240px] bg-[#141a21]/85 backdrop-blur border border-borderStrong p-4 rounded shadow-lg space-y-4 font-mono">
-          <div className="text-[10px] uppercase font-bold text-amber tracking-wider border-b border-borderStrong pb-1 flex justify-between items-center">
+        <div className="absolute top-4 left-4 z-10 w-[240px] bg-[#0e131b]/85 backdrop-blur border border-white/5 p-4 rounded shadow-lg space-y-4 font-mono">
+          <div className="text-[10px] uppercase font-bold text-amber tracking-wider border-b border-white/5 pb-1 flex justify-between items-center">
             <span>Graph Config</span>
-            {isolatedNodeId && <span className="text-[#ff4a4a]">ISOLATED</span>}
+            {isolatedNodeId && <span className="text-[#ff4a4a] font-bold animate-pulse">ISOLATED</span>}
           </div>
           
           <div className="space-y-3 text-[10px]">
@@ -571,7 +571,7 @@ export default function Neo4jExplorer() {
             <div className="space-y-1">
               <div className="flex justify-between text-muted">
                 <span>Node Spacing</span>
-                <span className="text-text">{physics.linkDistance}px</span>
+                <span className="text-text font-bold">{physics.linkDistance}px</span>
               </div>
               <input
                 type="range"
@@ -587,7 +587,7 @@ export default function Neo4jExplorer() {
             <div className="space-y-1">
               <div className="flex justify-between text-muted">
                 <span>Repulsion Force</span>
-                <span className="text-text">{Math.abs(physics.repulsionCharge)}</span>
+                <span className="text-text font-bold">{Math.abs(physics.repulsionCharge)}</span>
               </div>
               <input
                 type="range"
@@ -604,8 +604,8 @@ export default function Neo4jExplorer() {
               <span className="text-muted">Auto Orbit</span>
               <button
                 onClick={() => setAutoOrbit(!autoOrbit)}
-                className={`px-2 py-0.5 border text-[9px] uppercase font-bold ${
-                  autoOrbit ? "border-amber text-amber bg-amber/5" : "border-borderStrong text-muted"
+                className={`px-2.5 py-0.5 border text-[9px] uppercase font-bold rounded transition-all duration-200 ${
+                  autoOrbit ? "border-amber text-amber bg-amber/10 shadow-[0_0_8px_rgba(255,170,34,0.15)]" : "border-white/10 text-muted"
                 }`}
               >
                 {autoOrbit ? "ON" : "OFF"}
@@ -613,13 +613,13 @@ export default function Neo4jExplorer() {
             </div>
           </div>
 
-          <div className="text-[9px] text-muted leading-relaxed">
-            💡 Adjust gravity sliders to expand graph nodes and declutter spacing. Double-click any node to center.
+          <div className="text-[9px] text-muted/80 leading-relaxed">
+            💡 Adjust gravity sliders to expand graph nodes. Double-click any node to center.
           </div>
         </div>
 
         {/* OVERLAY 4: Floating Right Detail Inspector */}
-        <div className="absolute right-4 bottom-4 top-[64px] z-10 w-[300px] bg-[#141a21]/90 backdrop-blur-md border border-borderStrong p-5 rounded shadow-drawer flex flex-col justify-between overflow-y-auto">
+        <div className="absolute right-4 bottom-4 top-[64px] z-10 w-[300px] bg-[#0e131b]/90 backdrop-blur-md border border-white/5 p-5 rounded shadow-drawer flex flex-col justify-between overflow-y-auto scrollbar-thin">
           {activeNode ? (
             <div className="space-y-4">
               <div>
@@ -631,24 +631,24 @@ export default function Neo4jExplorer() {
                 </h3>
               </div>
 
-              <div className="border-t border-borderStrong pt-4 space-y-3 font-mono text-xs">
+              <div className="border-t border-white/5 pt-4 space-y-3 font-mono text-xs">
                 {activeNode.risk_score !== undefined && (
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-base border border-border px-2.5 py-1.5">
-                      <span className="text-[9px] uppercase text-muted block">Risk Score</span>
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-2.5 py-1.5 rounded">
+                      <span className="text-[9px] uppercase text-muted block font-bold">Risk Score</span>
                       <span className="font-bold text-amber">{activeNode.risk_score.toFixed(1)}</span>
                     </div>
-                    <div className="bg-base border border-border px-2.5 py-1.5">
-                      <span className="text-[9px] uppercase text-muted block">Risk Tier</span>
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-2.5 py-1.5 rounded">
+                      <span className="text-[9px] uppercase text-muted block font-bold">Risk Tier</span>
                       <span className="font-bold text-text">{activeNode.risk_level || "Low"}</span>
                     </div>
                   </div>
                 )}
 
                 {activeNode.type === "user" && (
-                  <div className="bg-base border border-border px-3 py-2 space-y-1">
-                    <span className="text-[9px] uppercase text-muted block">Status</span>
-                    <strong className={activeNode.is_compromised ? "text-[#ff4a4a]" : "text-emerald-400"}>
+                  <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 space-y-1 rounded">
+                    <span className="text-[9px] uppercase text-muted block font-bold">Status</span>
+                    <strong className={activeNode.is_compromised ? "text-[#ff4a4a] font-bold" : "text-emerald-400 font-bold"}>
                       {activeNode.is_compromised ? "⚠️ COMPROMISED IDENT" : "🟢 VERIFIED SENDER"}
                     </strong>
                   </div>
@@ -656,15 +656,15 @@ export default function Neo4jExplorer() {
 
                 {activeNode.type === "session" && (
                   <div className="space-y-2">
-                    <div className="bg-base border border-border px-3 py-2 space-y-1 text-[11px] leading-relaxed">
-                      <span className="text-[9px] uppercase text-muted block">Explainer</span>
-                      <div>{activeNode.explanation}</div>
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 space-y-1 text-[11px] leading-relaxed rounded">
+                      <span className="text-[9px] uppercase text-muted block font-bold">Explainer</span>
+                      <div className="text-text/80">{activeNode.explanation}</div>
                     </div>
-                    <div className="bg-base border border-border px-3 py-1.5 flex justify-between items-center text-[11px]">
-                      <span className="text-[9px] uppercase text-muted">Quantum Risk:</span>
-                      <strong className="text-purple-400">{activeNode.quantum_risk_level}</strong>
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-1.5 flex justify-between items-center text-[11px] rounded">
+                      <span className="text-[9px] uppercase text-muted font-bold">Quantum Risk:</span>
+                      <strong className="text-purple-400 font-bold">{activeNode.quantum_risk_level}</strong>
                     </div>
-                    <div className="bg-base border border-border px-3 py-2 text-[10px] space-y-1 text-muted">
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 text-[10px] space-y-1 text-muted rounded">
                       <div>Failed Logins: {activeNode.failed_login_count}</div>
                       <div>Device change: {activeNode.device_changed ? "Yes" : "No"}</div>
                       <div>Travel alert: {activeNode.geo_velocity_flag ? "High" : "No"}</div>
@@ -674,11 +674,11 @@ export default function Neo4jExplorer() {
 
                 {activeNode.type === "transaction" && (
                   <div className="space-y-2">
-                    <div className="bg-base border border-border px-3 py-2">
-                      <span className="text-[9px] uppercase text-muted block">Amount</span>
-                      <strong className="text-emerald-400 text-sm">INR {activeNode.amount.toLocaleString()}</strong>
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 rounded">
+                      <span className="text-[9px] uppercase text-muted block font-bold">Amount</span>
+                      <strong className="text-emerald-400 text-sm font-black">INR {activeNode.amount.toLocaleString()}</strong>
                     </div>
-                    <div className="bg-base border border-border px-3 py-2 text-[10px] space-y-0.5 text-muted">
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 text-[10px] space-y-0.5 text-muted rounded">
                       <div>Channel: {activeNode.channel}</div>
                       <div>Category: {activeNode.merchant_category}</div>
                       <div className="truncate">Timestamp: {activeNode.timestamp}</div>
@@ -688,15 +688,15 @@ export default function Neo4jExplorer() {
 
                 {activeNode.type === "beneficiary" && (
                   <div className="space-y-2">
-                    <div className="bg-base border border-border px-3 py-2">
-                      <span className="text-[9px] uppercase text-muted block">Total Received</span>
-                      <strong className="text-emerald-400 text-sm">INR {(activeNode.total_received || 0).toLocaleString()}</strong>
+                    <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 rounded">
+                      <span className="text-[9px] uppercase text-muted block font-bold">Total Received</span>
+                      <strong className="text-emerald-400 text-sm font-black">INR {(activeNode.total_received || 0).toLocaleString()}</strong>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[10px] text-muted">
-                      <div className="bg-base border border-border px-2.5 py-1.5">
+                      <div className="bg-[#070a0e]/50 border border-white/5 px-2.5 py-1.5 rounded">
                         <span>Wires: {activeNode.txn_count || 0}</span>
                       </div>
-                      <div className="bg-base border border-border px-2.5 py-1.5">
+                      <div className="bg-[#070a0e]/50 border border-white/5 px-2.5 py-1.5 rounded">
                         <span>Wallet: {activeNode.is_new ? "NEW" : "OLD"}</span>
                       </div>
                     </div>
@@ -704,31 +704,31 @@ export default function Neo4jExplorer() {
                 )}
 
                 {activeNode.type === "ipaddress" && (
-                  <div className="bg-base border border-border px-3 py-2">
-                    <span className="text-[9px] uppercase text-muted block">Host Node IP</span>
-                    <strong className="text-text">{activeNode.value}</strong>
+                  <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 rounded">
+                    <span className="text-[9px] uppercase text-muted block font-bold">Host Node IP</span>
+                    <strong className="text-text font-bold">{activeNode.value}</strong>
                   </div>
                 )}
 
                 {activeNode.type === "device" && (
-                  <div className="bg-base border border-border px-3 py-2">
-                    <span className="text-[9px] uppercase text-muted block">Device Signature</span>
-                    <strong className="text-text text-[10px] block truncate">{activeNode.id}</strong>
+                  <div className="bg-[#070a0e]/50 border border-white/5 px-3 py-2 rounded">
+                    <span className="text-[9px] uppercase text-muted block font-bold">Device Signature</span>
+                    <strong className="text-text text-[10px] block truncate font-bold">{activeNode.id}</strong>
                   </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="text-center text-xs text-muted font-mono my-auto py-8">
+            <div className="text-center text-xs text-muted/80 font-mono my-auto py-8">
               🔍 Left-click node to inspect attributes.<br/><br/>
-              🔍 Double-click to isolate neighbor connections.
+              🔍 Double-click to isolate connections.
             </div>
           )}
 
           {/* Footer Stats summary in overlay */}
-          <div className="border-t border-borderStrong pt-4 mt-4 space-y-2">
+          <div className="border-t border-white/5 pt-4 mt-4 space-y-2">
             <span className="text-[9px] font-bold uppercase tracking-wider text-muted font-mono block">Database Stats</span>
-            <div className="grid grid-cols-3 gap-1 bg-base border border-border p-1 rounded font-mono text-[10px] text-center">
+            <div className="grid grid-cols-3 gap-1 bg-[#070a0e]/50 border border-white/5 p-1 rounded font-mono text-[10px] text-center">
               <div>
                 <span className="text-muted block text-[8px]">DB</span>
                 <span className={`font-bold ${dbStatus === "online" ? "text-emerald-400" : "text-riskHigh"}`}>{dbStatus}</span>
@@ -746,20 +746,20 @@ export default function Neo4jExplorer() {
         </div>
 
         {/* OVERLAY 5: Sliding Bottom Center Cypher Console (Frosted Glass) */}
-        <div className="absolute bottom-4 left-4 right-[320px] z-10 bg-[#141a21]/90 backdrop-blur-md border border-borderStrong p-3.5 rounded shadow-lg space-y-2">
+        <div className="absolute bottom-4 left-4 right-[320px] z-10 bg-[#0e131b]/90 backdrop-blur-md border border-white/5 p-3.5 rounded shadow-lg space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber font-mono">Cypher Query console</span>
             {!isMock && (
               <div className="flex gap-1">
                 <button
                   onClick={() => setCypherQuery("MATCH (n:User)-[r]->(s:Session) RETURN n,r,s LIMIT 60")}
-                  className="text-[9px] border border-borderStrong hover:border-amber px-2 py-0.5 font-mono text-muted uppercase"
+                  className="text-[9px] border border-white/10 hover:border-amber px-2 py-0.5 font-mono text-muted hover:text-amber rounded uppercase transition-colors"
                 >
                   Logins
                 </button>
                 <button
                   onClick={() => setCypherQuery("MATCH (t:Transaction)-[r]->(b:Beneficiary) RETURN t,r,b LIMIT 80")}
-                  className="text-[9px] border border-borderStrong hover:border-amber px-2 py-0.5 font-mono text-muted uppercase"
+                  className="text-[9px] border border-white/10 hover:border-amber px-2 py-0.5 font-mono text-muted hover:text-amber rounded uppercase transition-colors"
                 >
                   Mules
                 </button>
@@ -771,7 +771,7 @@ export default function Neo4jExplorer() {
               value={cypherQuery}
               onChange={(e) => setCypherQuery(e.target.value)}
               disabled={isMock || queryLoading}
-              className="flex-1 font-mono text-[11px] bg-[#0b0f13] border border-borderStrong p-2 text-text rounded focus:outline-none focus:border-amber placeholder:text-muted/30 resize-none h-[42px]"
+              className="flex-1 font-mono text-[11px] bg-[#070a0e] border border-white/5 p-2 text-cyberBlue rounded focus:outline-none focus:border-amber/50 placeholder:text-muted/30 resize-none h-[42px] focus:bg-[#070a0e]/80"
               placeholder={isMock ? "Start database in Neo4j Desktop to run queries..." : "Write Cypher query..."}
             />
             <button
@@ -789,7 +789,7 @@ export default function Neo4jExplorer() {
       {/* Setup Config Sliding Drawer Modal */}
       {isConfigOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-sm">
-          <div className="h-full w-full max-w-[400px] border-l border-borderStrong bg-panel shadow-drawer p-6 flex flex-col justify-between overflow-y-auto reveal">
+          <div className="h-full w-full max-w-[400px] border-l border-white/5 bg-[#0e131b]/95 backdrop-blur-md shadow-drawer p-6 flex flex-col justify-between overflow-y-auto reveal">
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-md font-bold text-text uppercase tracking-wider font-mono">Database Settings</h2>
@@ -801,7 +801,7 @@ export default function Neo4jExplorer() {
                 </button>
               </div>
 
-              <div className="border border-border bg-panelSoft p-4 rounded text-[11px] space-y-1.5 text-muted font-mono leading-relaxed">
+              <div className="border border-white/5 bg-[#151c27]/50 p-4 rounded text-[11px] space-y-1.5 text-muted font-mono leading-relaxed shadow-inner">
                 <div className="font-bold text-amber">NEO4J DESKTOP SETUP:</div>
                 <div>1. Ensure local DBMS is <span className="text-emerald-400">Started</span>.</div>
                 <div>2. default URI: <code className="text-text">bolt://localhost:7687</code>.</div>
@@ -817,7 +817,7 @@ export default function Neo4jExplorer() {
                     required
                     value={credentials.uri}
                     onChange={(e) => setCredentials({ ...credentials, uri: e.target.value })}
-                    className="w-full bg-[#0b0f13] border border-borderStrong p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
+                    className="w-full bg-[#070a0e] border border-white/5 p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
                   />
                 </div>
                 <div className="space-y-1">
@@ -827,7 +827,7 @@ export default function Neo4jExplorer() {
                     required
                     value={credentials.username}
                     onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                    className="w-full bg-[#0b0f13] border border-borderStrong p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
+                    className="w-full bg-[#070a0e] border border-white/5 p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
                   />
                 </div>
                 <div className="space-y-1">
@@ -837,7 +837,7 @@ export default function Neo4jExplorer() {
                     required
                     value={credentials.database}
                     onChange={(e) => setCredentials({ ...credentials, database: e.target.value })}
-                    className="w-full bg-[#0b0f13] border border-borderStrong p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
+                    className="w-full bg-[#070a0e] border border-white/5 p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
                   />
                 </div>
                 <div className="space-y-1">
@@ -847,7 +847,7 @@ export default function Neo4jExplorer() {
                     placeholder="Enter database password"
                     value={credentials.password}
                     onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                    className="w-full bg-[#0b0f13] border border-borderStrong p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
+                    className="w-full bg-[#070a0e] border border-white/5 p-2 text-xs font-mono text-text focus:outline-none focus:border-amber rounded"
                   />
                 </div>
                 <button
@@ -859,7 +859,7 @@ export default function Neo4jExplorer() {
               </form>
 
               {dbStatus === "online" && (
-                <div className="border-t border-borderStrong pt-6 space-y-4 font-mono">
+                <div className="border-t border-white/5 pt-6 space-y-4 font-mono">
                   <div>
                     <h3 className="text-xs uppercase font-bold text-text">Import & Sync</h3>
                     <p className="text-[10px] text-muted mt-1 leading-relaxed">
@@ -878,7 +878,7 @@ export default function Neo4jExplorer() {
               )}
             </div>
 
-            <div className="text-[9px] font-mono text-muted text-center pt-8">
+            <div className="text-[9px] font-mono text-muted text-center pt-8 border-t border-white/5">
               CyberPulse Console v0.1.0 • Neo4j Driver Client
             </div>
           </div>
